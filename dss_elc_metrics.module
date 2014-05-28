@@ -1,0 +1,1715 @@
+<?php
+
+/**
+ * Implements hook_menu()
+ *
+ */
+function dss_elc_metrics_menu() {
+
+  $items = array(
+		 'metrics' => array(
+				    'page callback' => 'dss_elc_metrics_get_node_metrics_ajax',
+				    'access callback' => TRUE,
+				    ),
+		 'bivariate' => array(
+				      'page callback' => 'dss_elc_metrics_get_bivariate_ajax',
+				      'access callback' => TRUE),
+		 'network' => array(
+				    'page callback' => 'dss_elc_metrics_get_network_ajax',
+				    'access callback' => TRUE),
+		 'loaned/items' => array(
+					 'page callback' => 'dss_elc_metrics_get_items_loaned_ajax',
+					 'access callback' => TRUE,
+					 ),
+		 'persons/loaned/items' => array(
+						 'page callback' => 'dss_elc_metrics_get_items_loaned_persons_ajax',
+						 'access callback' => TRUE,
+						 ),
+		 );
+
+  return $items;
+}
+
+/**
+ * @author griffinj@lafayette.edu
+ *
+ * Case: Analyze humans by gender
+ * Case: Analyze humans by occupation
+ * Case: Analyze humans by location
+ * Case: Analyze humans by membership
+ * Case: Analyze humans by type
+ *
+ * Case: Analyze books by subject
+ * Case: Analyze books by format
+ * Case: Analyze books by type
+ *
+ */
+function dss_elc_metrics_get_node_metrics_ajax($contentType, $field) {
+
+  if(!isset($field) || !isset($contentType)) {
+
+    drupal_json_output(array());
+    return;
+  }
+
+  $entities = array();
+
+  //$entities[] = dss_elc_get_node('nid', 101036);
+  //$entities[] = dss_elc_get_node('nid', 101037);
+
+  //$entities = dss_elc_get_nodes($contentType);
+
+  $FIELD_NAME_MAP = array(
+			  'gender' => 'field_human_gender',
+			  'occupation' => 'field_human_occupation',
+			  'membership' => 'field_person_membership',
+			  'location' => 'field_person_location',
+			  'subject' => 'field_item_subject',
+			  'format' => 'field_item_format');
+
+  if(array_key_exists($field, $FIELD_NAME_MAP)) {
+
+    $field = $FIELD_NAME_MAP[$field];
+  }
+
+  if($contentType == 'human') {
+
+    $index = array();
+
+    if($field == 'field_person_membership'
+       || $field == 'field_person_location') {
+
+      /**
+       * griffinj
+       * Prototype
+       *
+       */
+      if($field == 'field_person_membership') {
+
+	$index = array(
+		       array("label" => "Arndt Family", "value" => rand(1,477)),
+		       array("label" => "Mixsell Family", "value" => rand(1,477)),
+		       array("label" => "Sitgreaves Family", "value" => rand(1, 477)),
+		       array('label' => 'The First United Church of Christ', 'value' => rand(1, 477))
+		       );
+      } else {
+
+	$index = array(
+		       array("label" => "Easton", "value" => rand(1, 477)),
+		       array("label" => "Northampton", "value" => rand(1, 477)),
+		       array("label" => "Phillipsburg", "value" => rand(1, 477)),
+		       array("label" => "Philadelphia", "value" => rand(1, 477))
+		       );
+      }
+      drupal_json_output($index);
+      return;
+
+      foreach($entities as $human) {
+
+	$entityRefField = $human->$field;
+	
+	foreach($entityRefField[$human->language] as $value) {
+
+	  $entity = dss_elc_get_node('nid', intval($value['target_id']));
+
+	  if(false) {
+
+	    $nameField = $entity->field_person_name[$entity->language][0]['value'];
+	  } elseif($field == 'field_person_membership'
+		   || $field == 'field_person_location') {
+	    
+	    $nameField = $entity->title;
+	  }
+
+	  if(!array_key_exists($nameField, $index)) {
+	    
+	    $index[$nameField] = 1;
+	  } else {
+	    
+	    $index[$nameField]++;
+	  }
+	}
+      }
+    } elseif($field == 'field_human_occupation'
+	     || $field == 'field_person_type') {
+
+      if($field == 'field_human_occupation') {
+	
+	$index = array(
+		       array("label" => "Physician", "value" => rand(1, 477)),
+		       array("label" => "Lawyer", "value" => rand(1, 477)),
+		       array("label" => "Carpenter", "value" => rand(1, 477))
+		       );
+      } else {
+
+	$index = array(
+		       array("label" => "Shareholder", "value" => rand(1, 477)),
+		       array("label" => "Representative", "value" => rand(1, 477))
+		       );
+      }
+      drupal_json_output($index);
+      return;
+
+      foreach($entities as $item) {
+
+	$taxonField = $item->$field;
+
+	foreach($taxonField[$item->language] as $tid) {
+
+	  $term = taxonomy_term_load($tid['tid']);
+
+	  if(!array_key_exists($term->name, $index)) {
+	  
+	    $index[$term->name] = 1;
+	  } else {
+
+	    $index[$term->name]++;
+	  }
+	}
+      }     
+    } elseif($field == 'field_human_gender') {
+
+      $GENDER_MAP = array('Male', 'Female');
+      foreach($entities as $human) {
+
+	$intField = $human->$field;
+
+	if(!isset($intField[$human->language])) {
+
+	  continue;
+	}
+	$fieldValue = $GENDER_MAP[$intField[$human->language][0]['value']];
+
+	if(!array_key_exists($fieldValue, $index)) {
+	  
+	  $index[$fieldValue] = 1;
+	} else {
+
+	  $index[$fieldValue]++;
+	}
+      }
+    }
+  } elseif($contentType == 'book'
+	   || $contentType == 'periodical'
+	   || $contentType == 'item') {
+    
+    $index = array();
+
+    // Many-to-many relationship between the subjects and books/periodicals/items
+    if($field == 'field_item_subject') {
+
+      /**
+       * griffinj
+       * Prototype
+       *
+       */
+
+      /*
+	Small Books on Great Subjects edit
+ 
+	Statistics edit
+ 
+	Theology: General edit
+ 
+	Theology: Sermons edit
+ 
+	Travels and Voyages: Africa and Asia edit
+ 
+	Travels and Voyages: American edit
+ 
+	Travels and Voyages: Europe edit
+ 
+Travels and Voyages: General
+       */
+
+      /*
+Miscellaneous Works                                              |
+| Travels and Voyages: Europe                                      |
+| History: General and Universal                                   |
+| Architecture, Fine Arts & Mechanics                              |
+| Archaeology                                                      |
+| Pamphlets                                                        |
+| History: European                                                |
+| Fiction                                                          |
+| Geographical and Topographical Works                             |
+| Natural Sciences and Medicine: Medicine                          |
+| Belles Letters: Letters                                          |
+| History: Asia                                                    |
+|  Encyclopedias                                                   |
+| Biography: European                                              |
+| Belles Letters: Poetical Works                                   |
+| Agricultural and Rural Affairs                                   |
+| History: American                                                |
+| Theology: General                                                |
+| Natural Sciences and Medicine: General                           |
+| Belles Letters: Rhetoric and Criticism                           |
+| Politics: General                                                |
+| Travels and Voyages: General                                     |
+| Biography: Dictionaries and Collections                          |
+| Magazines, Journals, and Reviews                                 |
+| Moral and Mental Philosophy                                      |
+| Natural Sciences and Medicine: The Bridgewater Treatises         |
+| Belles Letters: General; Politics: General                       |
+| Politics: General; Belles Letters: General                       |
+| Politics: Local Political Affairs                                |
+| Belles Letters: General                                          |
+| Travels and Voyages: Africa and Asia                             |
+| Biography: American                                              |
+| Travels and Voyages: American                                    |
+| Fiction; Belles Letters: Letters; Theology: Sermons              |
+| Natural Sciences and Medicine: Zoology                           |
+| Belles Letters: Dramatical Works                                 |
+| Theology: Sermons                                                |
+| History: Ecclesiastical                                          |
+| Belles Letters: Essays                                           |
+| Natural Sciences and Medicine: Chemistry and Natural Philosophy  |
+| Miscellaneous Works; Architecture, Fine Arts & Mechanics         |
+| Natural Sciences and Medicine: Botany and Astronomy              |
+| Politics: Jurisprudence                                          |
+| Dictionaries, Catalogues, and Works of Education                 |
+| Belles Letters: Oratorical Works                                 |
+| Natural Sciences and Medicine: Geology and Mineralogy            |
+| Politics: Political Economy                                      |
+| Fiction; Belles Letters: Dramatical Works                        |
+| Belles Letters: Poetical Works; Theology: General                |
+| Fiction; Miscellaneous Works                                     |
+| Biography: European; Miscellaneous Works                         |
+| Belles Letters: Poetical Works; Fiction                          |
+| Belles Letters: Essays; Miscellaneous Works                      |
+| Miscellaneous Works; Theology: General                           |
+| Lardner's Cabinet Encyclopedia                                   |
+| Harper's Family Library                                          |
+| Library of Entertaining Knowledge                                |
+| Belles Letters: Poetical Works; Belles Letters: Dramatical Works |
+| Biography: European; Fiction                                     |
+| Belles Letters: General; Biography: European                     |
+       */
+
+      $index = array(
+		     array("label" => "Theology: General", "value" => rand(1, 1898)),
+		     array("label" => "Travels and Voyages: Africa and Asia", "value" => rand(1, 1898)),
+		     array("label" => "Natural Sciences and Medicine: Medicine", "value" => rand(1, 1898))
+		     );
+      drupal_json_output($index);
+      return;
+
+      foreach($entities as $item) {
+
+	foreach($item->field_item_subject[$item->language] as $tid) {
+
+	  $term = taxonomy_term_load($tid['tid']);
+
+	  if(!array_key_exists($term->name, $index)) {
+	  
+	    $index[$term->name] = 1;
+	  } else {
+
+	    $index[$term->name]++;
+	  }
+	}
+      }
+    } elseif($field == 'field_item_format') {
+
+      $index = array(
+		     array("label" => "Octavo", "value" => 57),
+		     array("label" => "Quarto", "value" => 42),
+		     array("label" => "Duodecimo", "value" => 61));
+      drupal_json_output($index);
+      return;
+
+      //drupal_json_output($field);
+      $FORMAT_MAP = array('Octavo', 'Quarto', 'Duodecimo');
+      foreach($entities as $item) {
+
+	//drupal_json_output($item->field_item_format[$item->language]);
+	if(!isset($item->field_item_format[$item->language])) {
+
+	  continue;
+	}
+	$item_format = $FORMAT_MAP[$item->field_item_format[$item->language][0]['value']];
+
+
+	if(!array_key_exists($item_format, $index)) {
+	  
+	  $index[$item_format] = 1;
+	} else {
+
+	  $index[$item_format]++;
+	}
+      }
+    }
+  }
+
+  // For D3
+  foreach($index as $key => &$value) {
+
+    unset($index[$key]);
+    $index[] = array('label' => $key,
+		     'value' => $value);
+  }
+
+  drupal_json_output($index);
+}
+
+/**
+ * @author griffinj@lafayette.edu
+ *
+ * Case: The total number books/periodicals/items loaned to a single person of a certain gender
+ *
+ */
+function dss_elc_metrics_get_items_loaned($nid) {
+
+  module_load_include('inc', 'dss_elc', 'includes/data_access');
+  $personEntity = dss_elc_get_node('nid', intval($nid), 'person');
+
+  // No JOIN operations permitted for entityCondition queries in Drupal 7
+  // Integrate with the RDF Indexer module
+  $loans = dss_elc_get_nodes('loan', 'field_bib_rel_subject', intval($personEntity->nid), FIELD_TYPE_ENTITY_REF);
+
+  $items = array();
+  foreach($loans as $loan) {
+
+    // These are manifestations
+    foreach($loan->field_bib_rel_object[$loan->language] as $item) {
+
+      $manif = dss_elc_get_node('nid', intval($item['target_id']), 'item');
+
+      // Refactor
+      foreach(dss_elc_get_nodes('book', 'field_item_embodies', intval($manif->nid), FIELD_TYPE_ENTITY_REF) as $book) {
+
+	$items[] = $book;
+      }
+      foreach(dss_elc_get_nodes('periodical', 'field_item_embodies', intval($manif->nid), FIELD_TYPE_ENTITY_REF) as $periodical) {
+
+	$items[] = $periodical;
+      }
+      foreach(dss_elc_get_nodes('item', 'field_item_embodies', intval($manif->nid), FIELD_TYPE_ENTITY_REF) as $item) {
+
+	$items[] = $item;
+      }
+    }
+  }
+
+  return $items;
+}
+
+/*
+ *
+ * Use Cases:
+ * Agent requests the total number books/periodicals/items loaned to a single person of a certain gender
+ * Agent requests the total number of unique titles of books/periodicals/items loaned to a single person of a certain gender
+ * Agent requests the total number of unique authors of books/periodicals/items loaned to a single person of a certain gender
+ * Agent requests the total number of unique subjects of books/periodicals/items loaned to a single person of a certain gender
+ * Agent requests the total number of unique formats of books/periodicals/items loaned to a single person of a certain gender
+ *
+ */
+function dss_elc_metrics_get_indexed_items_loaned($nid, $distinctField) {
+
+  switch($distinctField) {
+
+  case 'title':
+
+      $distinctField = 'field_artifact_title';
+      break;
+
+    case 'author':
+
+      $distinctField = 'field_artifact_was_authored_by';
+      break;
+
+    case 'subject':
+
+      $distinctField = 'field_item_subject';
+      break;
+
+    case 'format':
+
+      $distinctField = 'field_item_format';
+      break;
+    }
+
+    $index = array();
+    $items = array();
+
+    foreach(dss_elc_metrics_get_items_loaned($nid) as $item) {
+
+      if($distinctField == 'field_item_subject') {
+
+	// Unique subjects
+	$subjectField = $item->$distinctField;
+	
+	foreach( $subjectField[$item->language] as $subjectTerm) {
+	    
+	  if(!in_array($subjectTerm['tid'], $index)) {
+	    
+	    $index[] = $subjectTerm['tid'];
+	    $items[$subjectTerm['tid']] = array($item);
+	  } else {
+	    
+	    $items[$subjectTerm['tid']][] = $item;
+	  }
+	}
+      } elseif($distinctField == 'field_artifact_was_authored_by') {
+	
+	$authorField = $item->$distinctField;
+	$author = dss_elc_get_node('nid', intval($authorField[$item->language]['target_id']), 'person');
+	
+	if(!in_array($author->nid, $index)) {
+	  
+	  $index[] = $author->nid;
+	  $items[$author->title] = array($item);
+	} else {
+	  
+	  $items[$author->title][] = $item;
+	}
+      } else {
+	
+	if(!in_array($item->field_artifact_title[$item->language]->value, $index)) {
+	  
+	  $index[] = $item->field_artifact_title[$item->language]->value;
+	  $items[$item->field_artifact_title[$item->language]->value] = array($item);
+	} else {
+	  
+	  $items[$item->field_artifact_title[$item->language]->value][] = $item;
+	}
+      }
+    }
+
+    //drupal_json_output($items);
+    return $items;
+}
+
+/*
+ *
+ * Use Cases:
+ * Agent requests the total number of unique titles of books/periodicals/items loaned to a single person of a certain gender
+ * Agent requests the total number of unique titles of books/periodicals/items loaned to a single person of a certain occupation
+ *
+ */
+function dss_elc_metrics_get_items_loaned_persons_ajax() {
+
+  $items = array();
+
+  if(array_key_exists('nids', $_POST) && !empty($_POST['nids'])) {
+
+    // Refactor
+    if(!isset($_POST[$distinctField])) {
+
+      foreach($_POST['nids'] as $nid) {
+
+	$items[$nid] = dss_elc_metrics_get_items_loaned($nid);
+      }
+    } else {
+
+      foreach($_POST['nids'] as $nid) {
+	
+	//$items[$nid] = dss_elc_metrics_get_indexed_items_loaned($nid, $_POST[$distinctField]);
+	$items[$nid] = dss_elc_metrics_get_indexed_items_loaned($nid, $_POST[$distinctField]);
+      }
+    }
+  }
+
+  drupal_json_output($items);
+}
+
+/**
+ * @author griffinj
+ * Agent requests the total number of books/periodicals/items by subject loaned to a person of a certain gender
+ *
+ */
+
+function dss_elc_metrics_get_items_loaned_ajax($nid, $distinctField, $indexField) {
+
+  // Refactor
+  if(!isset($distinctField)) {
+
+    //drupal_json_output(dss_elc_metrics_get_items_loaned($nid));
+    drupal_json_output(array(
+			     'ordinal' => array('domain' => array('subjectA', 'subjectB', 'subjectC'),
+						'range' => array(
+								 'male' => array(45, 67, 78),
+								 'female' => array(54, 76, 87),
+								 )
+						)
+			     ));
+
+  } else {
+
+    drupal_json_output(dss_elc_metrics_get_indexed_items_loaned($nid, $distinctField));
+  }
+}
+
+function dss_elc_metrics_cache_set($mongo_id, $data, $collection_name='dss_elc_metrics') {
+
+  $collection = mongodb_collection($collection_name);
+
+  if(isset($data)) {
+
+    $doc = array('_id' => $mongo_id,
+		 'cid' => $mongo_id,
+		 //'created' => REQUEST_TIME,
+		 //'expire' => $expire,
+		 //'serialized' => !$scalar,
+		 //'data' => $scalar ? $data : serialize($data),
+		 'data' => $data);
+
+    $collection->save($doc);
+  }
+
+  return $data;
+  
+}
+
+function dss_elc_metrics_cache_get($mongo_id, $collection_name='dss_elc_metrics') {
+
+  $collection = mongodb_collection($collection_name);
+  $doc = $collection->findOne(array('_id' => $mongo_id));
+
+  $data = NULL;
+
+  if($doc && isset($doc['data'])) {
+
+    $data = json_decode($doc['data']);
+  }
+
+  return $data;
+}
+
+function dss_elc_metrics_cache_domains($bundle_u, $field_u, $bundle_v, $field_v) {
+
+  // Cache the loans
+  $entity_query = new EntityFieldQuery();
+  $entity_query->entityCondition('entity_type', 'node');
+  $entity_query->entityCondition('bundle', 'loan');
+  //$entity_query->fieldCondition('field_bib_rel_subject', 'target_id', $nids);
+  //$entity_query->fieldCondition('field_bib_rel_object', 'target_id', $nids);
+  
+  $entities = $entity_query->execute();
+  $loan_entities = node_load_multiple(array_keys($entities['node']));
+
+  $index = array();
+  $json_entity_values = array();
+
+  foreach($loan_entities as $loan_entity) {
+
+    $lang = $loan_entity->language;
+
+    $_object = $loan_entity->field_bib_rel_object->$lang;
+    $_object = node_load(intval($_object[0]->target_id));
+
+    //$_object = node_load($loan_entity->field_bib_rel_object_target_id);
+
+    // If this is a manifestation, retrieve the original work
+    if($_object->type == 'manifestation') {
+      
+      $entity_query = new EntityFieldQuery();
+      $entity_query->entityCondition('entity_type', 'node');
+      $entity_query->fieldCondition('field_item_embodies', 'target_id', $_object->nid, '=');
+      $entities = $entity_query->execute();
+      
+      $_object = node_load(array_pop(array_keys($entities['node'])));
+    }
+    
+    // Refactor
+    if($field_u != 'field_loan_duration') {
+      
+      $_field_u = $_object->$field_u;
+    }
+    
+    $_subject = $loan_entity->field_bib_rel_subject->$lang;
+    $_subject = node_load(intval($_subject[0]->target_id));
+    
+    //$_subject = node_load($loan_entity->field_bib_rel_subject_target_id);
+    
+    /**
+     * @abstract Handling for List fields
+     * Book/Periodical/Item: field_item_format
+     * Human: field_human_gender
+     *
+     */
+    $_field_v = $_subject->$field_v;
+    
+    // Refactor
+    if(empty($_subject->$field_v)) {
+      
+      $_sample_name = 'Unknown';
+    } else {
+      
+      if($field_v == 'field_human_gender') {
+	
+	$_field = field_info_field($field_v);
+	$_values = list_allowed_values($_field);
+	$_sample_name = array_pop($_field_v->$lang);
+	$_sample_name = $_values[$_sample_name->value];
+      } elseif($field_v == 'field_person_location' ||
+	       $field_v == 'field_person_membership') {
+	
+	$entity_id = array_pop($_field_v->$lang);
+	$loan_entity = node_load($entity_id->target_id);
+	
+	$_sample_name = $loan_entity->title;
+      }
+    }
+    
+    // For NULL List field values
+    if(!$_sample_name) {
+      
+      $_sample_name = 'Unknown';
+    }
+    
+    // Term Reference fields
+    // Refactor for array
+    if($field_u == 'field_human_occupation' ||
+       $field_u == 'field_person_type' ||
+       $field_u == 'field_item_subject' ||
+       $field_u == 'field_artifact_type') {
+      
+      // For the handling of NULL values
+      if(!$_field_u) {
+	
+	$_field_u = (object) array('und' => array('Unknown'));
+      }
+      
+      foreach($_field_u->$lang as $term) {
+	
+	//if(!array_key_exists('tid', $term)) {
+	if(!property_exists($term, 'tid')) {
+	  
+	    $domain = 'Unknown';
+	} else {
+	  
+	  $term = taxonomy_term_load($term->tid);
+	  $domain = $term->name;
+	}
+	
+	if(!array_key_exists($domain, $json_entity_values)) {
+	  
+	  $json_entity_values[$domain] = array($_sample_name => 1);	  
+	} else {
+	  
+	  $json_entity_values[$domain][$_sample_name]++;
+	}
+      }
+    } elseif($field_u == 'field_artifact_was_authored_by') { // Entity References
+
+      $_object = node_load(intval($loan_entity->field_bib_rel_object['und'][0]['target_id']));
+      $_field_u = $_object->$field_u;
+
+      $entity = node_load(intval($_field_u['und'][0]['target_id']));
+
+      $domain = $loan_entity->field_person_name->$lang;
+      $domain = $domain[0]->value;
+
+      // Refactor
+      if(!array_key_exists($domain, $json_entity_values)) {
+	
+	$json_entity_values[$domain] = array($_sample_name => 1);
+      } else {
+	
+	$json_entity_values[$domain][$_sample_name]++;
+      }
+    } elseif($field_u == 'field_item_format') { // Refactor
+
+      $_object = node_load(intval($loan_entity->field_bib_rel_object['und'][0]['target_id']));
+
+      if(true) {
+
+	drupal_json_output($_object->$field_u);
+	exit(1);
+      }
+
+      $_field_u = $_object->$field_u;
+
+      $_field = field_info_field($field_u);
+      $_values = list_allowed_values($_field);
+      $_domain = array_pop($_field_u->$lang);
+
+      if(true) {
+
+	drupal_json_output($_domain->value);
+	exit(1);
+      }
+
+      $domain = $_values[$_domain->value];
+
+      //$entity = node_load(intval($_field_u['und'][0]['target_id']));
+      
+      // For NULL values
+      if(!$domain) {
+	
+	$domain = 'Unknown';
+      }
+      
+      // Refactor
+      if(!array_key_exists($domain, $json_entity_values)) {
+	
+	$json_entity_values[$domain] = array($_sample_name => 1);
+      } else {
+	
+	$json_entity_values[$domain][$_sample_name]++;
+      }
+    } elseif($field_u == 'field_loan_duration') { // Loan duration
+      
+      // Parse from a UNIX timestamp
+      $domain = $loan_entity->field_loan_duration_value;
+      $date = new DateObject($domain);
+      $domain = $date->format('Ymd');
+      
+      // Refactor
+      if(!array_key_exists($domain, $json_entity_values)) {
+	
+	$json_entity_values[$domain] = array($_sample_name => 1);
+      } else {
+	
+	$json_entity_values[$domain][$_sample_name]++;
+      }
+      
+      // Also, set the type of scale to "temporal"
+      $scale_type = 'temporal';
+    }
+  }
+
+  foreach($json_entity_values as $domain => $samples) {
+
+    dss_elc_metrics_cache_set($domain, json_encode($samples));
+  }
+
+  dss_elc_metrics_cache_set($field_u, json_encode(array_keys($json_entity_values)));
+
+  return $json_entity_values;
+}
+
+
+function dss_elc_metrics_cache_get_domains($mongo_id) {
+
+  // REFACTOR
+  // This should be a Document structure WITHOUT foreign keys
+  $domain_names = dss_elc_metrics_cache_get($mongo_id);
+
+  if(!isset($domain_names)) {
+
+    return NULL;
+  }
+
+  $domains = array();
+  foreach($domain_names as $domain_name) {
+
+    $domains[$domain_name] = dss_elc_metrics_cache_get($domain_name);
+  }
+
+  return $domains;
+}
+
+function dss_elc_metrics_cache($mongo_id, $collection_name='dss_elc_metrics', $data=NULL) {
+
+  $collection = mongodb_collection($collection_name);
+
+  $doc = $collection->findOne(array('_id' => $mongo_id));
+
+  if(isset($data)) {
+
+    if(!$doc || !isset($doc['data'])) {
+
+      $doc = array('_id' => $mongo_id,
+		   'cid' => $mongo_id,
+		   //'created' => REQUEST_TIME,
+		   //'expire' => $expire,
+		   //'serialized' => !$scalar,
+		   //'data' => $scalar ? $data : serialize($data),
+		   'data' => $data);
+
+      $collection->save($doc);
+    } else {
+      
+      $data = $data['data'];
+    }
+
+  }
+
+  return $data;
+}
+
+/**
+ * @abstract
+ * Implementing a separate MongoDB cache for the Objects generated
+ *
+ */
+function dss_elc_metrics_cache_call($params, $callback, $force_update=FALSE, $collection_name='dss_elc_metrics') {
+
+  $collection = mongodb_collection($collection_name);
+  $mongo_id = json_encode($params);
+
+  $data = $collection->findOne(array('_id' => $mongo_id));
+
+  drupal_json_output(call_user_func_array($callback, $params));
+
+  if($force_update || (!$data || !isset($data['data']))) {
+
+    $object = call_user_func_array($callback, $params);
+
+    $doc = array('_id' => $mongo_id,
+		 'cid' => $mongo_id,
+		 //'created' => REQUEST_TIME,
+		 //'expire' => $expire,
+		 //'serialized' => !$scalar,
+		 //'data' => $scalar ? $data : serialize($data),
+		 'data' => $object);
+
+    $collection->save($doc);
+  } else {
+
+    $data = $data['data'];
+  }
+
+  return $data;
+}
+
+
+/**
+ * @author griffinj
+ * Retrieve the data for the bivariate relationships
+ *
+ */
+function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $metric) {
+
+  /*
+    { "ordinal": {
+    "domain": ["subjectA","subjectB","subjectC"],
+    "range": {
+    "male": [45,67,78],
+    "female":[54,76,87]
+    }}}
+  */
+
+  /*
+			    data : [
+			{ domain: 'subjectA', values: [ { sample: 'sampleA', value: 45 }, { sample: 'sampleB', value: 54 } ] },
+			{ domain: 'subjectB', values: [ { sample: 'sampleA', value: 67 }, { sample: 'sampleB', value: 76 } ] },
+			{ domain: 'subjectC', values: [ { sample: 'sampleA', value: 88 }, { sample: 'sampleB', value: 78 } ] } ],
+   */
+
+  // Refactor
+  $mongo_id = 'quantitative';
+  $collection_name = 'dss_elc_metrics_loans';
+
+  $loan_entities = dss_elc_metrics_cache_get($mongo_id, $collection_name);
+
+  /*
+  //if(!isset($loan_entities)) {
+  if(false) {
+
+    // Cache the loans
+    $entity_query = new EntityFieldQuery();
+    $entity_query->entityCondition('entity_type', 'node');
+    $entity_query->entityCondition('bundle', 'loan');
+    //$entity_query->fieldCondition('field_bib_rel_subject', 'target_id', $nids);
+    //$entity_query->fieldCondition('field_bib_rel_object', 'target_id', $nids);
+    
+    $entities = $entity_query->execute();
+    $loan_entities = node_load_multiple(array_keys($entities['node']));
+
+    dss_elc_metrics_cache_set($mongo_id, json_encode($loan_entities), $collection_name);
+  } else {
+
+  */
+
+  // Cache the domains
+  $mongo_id = $field_u;
+  $collection_name = 'dss_elc_metrics_loans';
+  
+  //$domains = dss_elc_metrics_cache_get($mongo_id, $collection_name);
+  $domains = dss_elc_metrics_cache_get_domains($field_u);
+
+  if(!isset($domains)) {
+    
+    $domains = dss_elc_metrics_cache_domains($bundle_u, $field_u, $bundle_v, $field_v);
+  }
+  //}
+
+  $metrics = array();
+
+  // Apply a linear transform for D3
+  $output = array();
+
+  foreach($domains as $domain => $samples) {
+
+    $sample_values = array();
+    
+    foreach($samples as $sample => $qty) {
+      
+      $sample_values[] = array('sample' => $sample,
+			       'value' => $qty);
+
+      $metrics[$sample] = array('sample' => $sample,
+				'aMean' => mt_rand() / mt_getrandmax(),
+				'median' => '{ ' . (string) (mt_rand() / mt_getrandmax()) . ' }',
+				'mode' => mt_rand() / mt_getrandmax(),
+				'kurtosisPearson' => mt_rand() / mt_getrandmax(),
+				'kurtosisFisher' => mt_rand() / mt_getrandmax(),
+				'distribution' => 'Poisson');
+    }
+
+    // Refactor
+    if($field_u == 'field_loan_duration') {
+     
+      // Work-around
+      $output[] = array('domain' => (string) $domain,
+			'values' => $sample_values);
+    } else {
+
+      $output[] = array('domain' => $domain,
+			'values' => $sample_values);
+    }
+  }
+
+  // Refactor
+  // Label mapping
+  $info_u = field_info_instance('node', $field_u, $field_u == 'field_loan_duration' ? 'loan' : 'item');
+  $info_v = field_info_instance('node', $field_v, 'human');
+
+  $y_axis = array('label' => 'Loans',
+		  'type' => 'ratio',
+		  'axis' => 'y');
+
+  // Refactor
+  if(true) {
+
+    $y_axis['property'] = 'value';
+  }
+
+  // Wrap the Object with the appropriate metadata
+  return array('data' => $output,
+	       'metrics' => $metrics,
+	       'metadata' => array('x' => array('label' => $info_u['label'],
+						'property' => 'domain',
+						'type' => $scale_type ? $scale_type : 'nominal',
+						'axis' => 'x'),
+				   'y' => $y_axis)
+	       );
+  
+  /**
+   * Find all U entities related to V entities through relation R
+   * This should be a simple SPARQL query, but ARC2 doesn't support PostgreSQL
+   *
+   */
+
+  // First, retrieve every entity with this relationship
+
+  // Retrieve all bundles from the ELC database sorted by the values for the field
+  $query = db_select('node', 'n');
+
+  $query->join("field_data_field_bib_rel_object", 'bib_rel_object', 'bib_rel_object.field_bib_rel_object_target_id=n.nid'); // Retrieve all field records for all NID's specified in the book loan records
+  $query->join('node', 'loan', 'loan.nid=bib_rel_object.entity_id'); // Retrieve all related loan records
+  $query->join("field_data_field_bib_rel_subject", 'bib_rel_subject', 'bib_rel_subject.entity_id=loan.nid'); // Retrieve all borrowers
+  $query->join("field_data_field_loan_duration", 'loan_duration', 'loan_duration.entity_id=loan.nid'); // Retrieve the duration of the loan
+
+  $query->condition('loan.type', 'loan', '=');
+  $query->fields('bib_rel_object', array('field_bib_rel_object_target_id'));
+  $query->fields('bib_rel_subject', array('field_bib_rel_subject_target_id'));
+  $query->fields('loan_duration', array('field_loan_duration_value', 'field_loan_duration_value2'));
+  $records = $query->execute();
+
+  $index = array();
+  $json_record_values = array();
+
+  /*
+$info = field_info_instance($entity_type, $field_name, $bundle_name);
+
+$label = $info['label'];
+   */
+
+  /*
+  foreach($records as $record) {
+
+    $_object = node_load($record->field_bib_rel_object_target_id);
+
+    // If this is a manifestation, retrieve the original work
+    if($_object->type == 'manifestation') {
+
+      $entity_query = new EntityFieldQuery();
+      $entity_query->entityCondition('entity_type', 'node');
+      $entity_query->fieldCondition('field_item_embodies', 'target_id', $_object->nid, '=');
+      $entities = $entity_query->execute();
+
+      $_object = node_load(array_pop(array_keys($entities['node'])));
+    }
+
+    // Refactor
+    if($field_u != 'field_loan_duration') {
+
+      $_field_u = $_object->$field_u;
+    }
+
+    $_subject = node_load($record->field_bib_rel_subject_target_id);
+
+    /**
+     * @note Handling for List fields
+     * Book/Periodical/Item: field_item_format
+     * Human: field_human_gender
+     *
+     * /
+    $_field_v = $_subject->$field_v;
+
+    // Refactor
+    if(empty($_subject->$field_v)) {
+
+      $_sample_name = 'Unknown';
+    } else {
+      
+      if($field_v == 'field_human_gender') {
+
+	$_field = field_info_field($field_v);
+	$_values = list_allowed_values($_field);
+	$_sample_name = array_pop($_field_v['und']);
+	$_sample_name = $_values[$_sample_name['value']];
+      } elseif($field_v == 'field_person_location' ||
+	       $field_v == 'field_person_membership') {
+	
+	$entity_id = array_pop($_field_v['und']);
+	$entity = node_load($entity_id['target_id']);
+	
+	$_sample_name = $entity->title;
+      }
+    }
+    
+    // For NULL List field values
+    if(!$_sample_name) {
+      
+      $_sample_name = 'Unknown';
+    }
+
+    // Term Reference fields
+    // Refactor for array
+    if($field_u == 'field_human_occupation' ||
+       $field_u == 'field_person_type' ||
+       $field_u == 'field_item_subject' ||
+       $field_u == 'field_artifact_type') {
+      
+      // For the handling of NULL values
+      if(!$_field_u) {
+	
+	$_field_u = array('und' => array('Unknown'));
+      }
+      
+      foreach($_field_u['und'] as $term) {
+	  
+	if(!array_key_exists('tid', $term)) {
+	  
+	  $domain = 'Unknown';
+	} else {
+
+	  $term = taxonomy_term_load($term['tid']);
+	  $domain = $term->name;
+	}
+
+	if(!array_key_exists($domain, $json_record_values)) {
+
+	  $json_record_values[$domain] = array($_sample_name => 1);	  
+	} else {
+	  
+	  $json_record_values[$domain][$_sample_name]++;
+	}
+      }
+    } elseif($field_u == 'field_artifact_was_authored_by') { // Entity References
+      
+      $entity_id = array_pop($_field_u['und']);
+      $entity = node_load($entity_id['target_id']);
+      
+      $domain = $entity->field_person_name['und'][0]['value'];
+      
+      // Refactor
+      if(!array_key_exists($domain, $json_record_values)) {
+	
+	$json_record_values[$domain] = array($_sample_name => 1);
+      } else {
+	
+	$json_record_values[$domain][$_sample_name]++;
+      }
+    } elseif($field_u == 'field_item_format') { // Refactor
+
+      $_field = field_info_field($field_u);
+      $_values = list_allowed_values($_field);
+      $_domain = array_pop($_field_u['und']);
+      $domain = $_values[$_domain['value']];
+
+      // For NULL values
+      if(!$domain) {
+
+	$domain = 'Unknown';
+      }
+
+      // Refactor
+      if(!array_key_exists($domain, $json_record_values)) {
+	
+	$json_record_values[$domain] = array($_sample_name => 1);
+      } else {
+	
+	$json_record_values[$domain][$_sample_name]++;
+      }
+    } elseif($field_u == 'field_loan_duration') { // Loan duration
+
+      // Parse from a UNIX timestamp
+      $domain = $record->field_loan_duration_value;
+      $date = new DateObject($domain);
+      $domain = $date->format('Ymd');
+
+      // Refactor
+      if(!array_key_exists($domain, $json_record_values)) {
+	
+	$json_record_values[$domain] = array($_sample_name => 1);
+      } else {
+	
+	$json_record_values[$domain][$_sample_name]++;
+      }
+
+      // Also, set the type of scale to "temporal"
+      $scale_type = 'temporal';
+    }
+  }
+
+  $metrics = array();
+
+  // Apply a linear transform for D3
+  $output = array();
+  foreach($json_record_values as $domain => $samples) {
+
+    $sample_values = array();
+    
+    foreach($samples as $sample => $qty) {
+      
+      $sample_values[] = array('sample' => $sample,
+			       'value' => $qty);
+
+      $metrics[$sample] = array('sample' => $sample,
+				'aMean' => mt_rand() / mt_getrandmax(),
+				'median' => '{ ' . (string) (mt_rand() / mt_getrandmax()) . ' }',
+				'mode' => mt_rand() / mt_getrandmax(),
+				'kurtosisPearson' => mt_rand() / mt_getrandmax(),
+				'kurtosisFisher' => mt_rand() / mt_getrandmax(),
+				'distribution' => 'Poisson');
+    }
+
+    // Refactor
+    if($field_u == 'field_loan_duration') {
+     
+      // Work-around
+      $output[] = array('domain' => (string) $domain,
+			'values' => $sample_values);
+    } else {
+
+      $output[] = array('domain' => $domain,
+			'values' => $sample_values);
+    }
+  }
+  */
+
+  // Refactor
+  // Label mapping
+  $info_u = field_info_instance('node', $field_u, $field_u == 'field_loan_duration' ? 'loan' : 'item');
+  $info_v = field_info_instance('node', $field_v, 'human');
+
+  $y_axis = array('label' => 'Loans',
+		  'type' => 'ratio',
+		  'axis' => 'y');
+
+  // Refactor
+  //if($field_u != 'field_loan_duration') {
+  if(true) {
+
+    $y_axis['property'] = 'value';
+  }
+
+  /*
+	    var metrics = { 'sampleA' : {
+
+		    sample: 'sampleA',
+		    aMean: 3.45,
+		    median: '{ ' + 4.56 + ' }',
+		    mode: 7.68,
+		    kurtosisPearson: 2.345,
+		    kurtosisFisher: -1,
+		    distribution: 'Poisson'
+		},
+			    'sampleB' : {
+
+			    },
+	    };
+   */
+
+  // Wrap the Object with the appropriate metadata
+  return array('data' => $output,
+	       'metrics' => $metrics,
+	       'metadata' => array('x' => array('label' => $info_u['label'],
+						'property' => 'domain',
+						'type' => $scale_type ? $scale_type : 'nominal',
+						'axis' => 'x'),
+				   'y' => $y_axis)
+	       );
+}
+
+function dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $metric) {
+  
+  dss_elc_metrics_cache_call(array($bundle_u, $field_u, $bundle_v, $field_v, $metric), '_dss_elc_metrics_bivariate');
+}
+
+function _dss_elc_metrics_network($relationship_bundle, $nids, $min=NULL, $max=NULL) {
+  
+  if($relationship_bundle == 'loan') {
+
+    $mongo_id = json_encode($nids);
+    $collection_name = 'dss_elc_metrics_loans';
+
+    /**
+     * @todo Integrate
+     */
+    //$loan_entities = dss_elc_metrics_cache_get($mongo_id, $collection_name);
+    $loan_entities = NULL;
+
+    if(!isset($loan_entities)) {
+
+      // Cache the loans fetched for any given subject
+      $entity_query = new EntityFieldQuery();
+      $entity_query->entityCondition('entity_type', 'node');
+      $entity_query->entityCondition('bundle', 'loan');
+      $entity_query->fieldCondition('field_bib_rel_subject', 'target_id', $nids, 'IN');
+
+      if(isset($max)) {
+
+	$min_date = date('c', $min);
+	$max_date = date('c', $max);
+
+	$entity_query->fieldCondition('field_loan_duration', 'value', array((int) $max, (int) $min), 'BETWEEN');
+      }
+
+      $entities = $entity_query->execute();
+      $loan_entities = node_load_multiple(array_keys($entities['node']));
+
+      //print json_encode($loan_entities);
+
+      /**
+       * @todo Integrate
+       */
+      //dss_elc_metrics_cache_set($mongo_id, json_encode($loan_entities), $collection_name);
+    }
+
+    // Avoid confusing Drupal "nodes" with network nodes
+    $vertices = array();
+    $indexed_edges = array();
+
+    // Refactor
+    $indexed_vertex_ids = array();
+
+    foreach($loan_entities as $loan_entity) {
+
+      if(isset($min_date) and isset($max_date)) {
+	
+	/**
+	 * Work-around
+	 * This will become unnecessary after integrating with DateTime
+	 *
+	 */
+	if((float) $loan_entity->field_loan_duration_value < (float) $min_date ||
+	   (float) $loan_entity->field_loan_duration_value > (float) $max_date) {
+
+	  //continue;
+	}
+      }
+
+      $lang = $loan_entity->language;
+
+      /*
+      $_object = $loan_entity->field_bib_rel_object->$lang;
+      $_object = node_load(intval($_object[0]->target_id));
+      */
+      $_object = $loan_entity->field_bib_rel_object[$lang];
+      $_object = node_load(intval($_object[0]['target_id']));
+
+      // If this is a manifestation, retrieve the original work
+      if($_object->type == 'manifestation') {
+	
+	$entity_query = new EntityFieldQuery();
+	$entity_query->entityCondition('entity_type', 'node');
+	$entity_query->fieldCondition('field_item_embodies', 'target_id', $_object->nid, '=');
+	$entities = $entity_query->execute();
+	
+	$_object = node_load(array_pop(array_keys($entities['node'])));
+      }
+
+      /*
+      $_subject = $loan_entity->field_bib_rel_subject->$lang;
+      $_subject = node_load(intval($_subject[0]->target_id));
+      */
+      $_subject = $loan_entity->field_bib_rel_subject[$lang];
+      $_subject = node_load(intval($_subject[0]['target_id']));
+      
+      // Refactor
+      if(!array_key_exists($_subject->nid, $indexed_vertex_ids)) {
+	
+	$vertices[] = array('label' => $_subject->title,
+			    'type' => $_subject->type);
+	
+	$indexed_vertex_ids[$_subject->nid] = sizeof($vertices) - 1;
+      }
+      
+      // Refactor
+      if(!array_key_exists($_object->nid, $indexed_vertex_ids)) {
+	
+	$vertices[] = array('label' => $_object->title,
+			    'type' => $_object->type);
+	
+	$indexed_vertex_ids[$_object->nid] = sizeof($vertices) - 1;
+      }
+      
+      if(!array_key_exists($_subject->nid, $indexed_edges)) {
+	
+	$indexed_edges[$_subject->nid] = array($_object->nid => array('source' => $indexed_vertex_ids[$_subject->nid],
+								      //'target' => $subject_vertex_id + 1,
+								      //'target' => sizeof($vertices),
+								      'target' => $indexed_vertex_ids[$_object->nid],
+								      'weight' => 1,
+								      'type' => 'borrowedBy'));
+	
+      } elseif(!array_key_exists($_object->nid, $indexed_edges[$_subject->nid])) {
+	
+	$indexed_edges[$_subject->nid][$_object->nid] = array(//'source' => $subject_vertex_id,
+							      'source' => $indexed_vertex_ids[$_subject->nid],
+							      //'target' => $subject_vertex_id + 1,
+								//'target' => sizeof($vertices),
+							      'target' => $indexed_vertex_ids[$_object->nid],
+							      'weight' => 1,
+							      'type' => 'borrowedBy');
+      } else {
+	
+	// Increase the weight for more than one loan for any given work
+	$indexed_edges[$_subject->nid][$_object->nid]['weight']++;
+      }
+    }
+  } elseif($relationship_bundle == 'personal_relationship') {
+
+    $mongo_id = json_encode($nids);
+    $collection_name = 'dss_elc_metrics_loans';
+
+    /**
+     * @todo Integrate
+     */
+    //$pers_rel_entities = dss_elc_metrics_cache_get($mongo_id, $collection_name);
+    $pers_rel_entities = NULL;
+
+    if(!isset($pers_rel_entities)) {
+
+      // Cache the loans fetched for any given subject
+      $entity_query = new EntityFieldQuery();
+      $entity_query->entityCondition('entity_type', 'node');
+      $entity_query->entityCondition('bundle', 'personal_relationship');
+      $entity_query->fieldCondition('field_pers_rel_subject', 'target_id', $nids, 'IN');
+
+      if(isset($max)) {
+
+	$entity_query->range((int) $min - 1, (int) $max);
+      }
+      
+      $entities = $entity_query->execute();
+      $pers_rel_entities = node_load_multiple(array_keys($entities['node']));
+
+      /**
+       * @todo Integrate
+       */
+      //dss_elc_metrics_cache_set($mongo_id, json_encode($pers_rel_entities), $collection_name);
+    }
+
+    // Avoid confusing Drupal "nodes" with network nodes
+    $vertices = array();
+    $indexed_edges = array();
+
+    // Refactor
+    $indexed_vertex_ids = array();
+
+    foreach($pers_rel_entities as $pers_rel_entity) {
+
+      $lang = $pers_rel_entity->language;
+
+      /*
+      $_object = $pers_rel_entity->field_pers_rel_object->$lang;
+      $_object = node_load(intval($_object[0]->target_id));
+      */
+      $_object = $pers_rel_entity->field_pers_rel_object[$lang];
+      $_object = node_load(intval($_object[0]['target_id']));
+
+      // If this is a manifestation, retrieve the original work
+      if($_object->type == 'manifestation') {
+	
+	$entity_query = new EntityFieldQuery();
+	$entity_query->entityCondition('entity_type', 'node');
+	$entity_query->fieldCondition('field_item_embodies', 'target_id', $_object->nid, '=');
+	$entities = $entity_query->execute();
+	
+	$_object = node_load(array_pop(array_keys($entities['node'])));
+      }
+
+      /*
+      $_subject = $pers_rel_entity->field_pers_rel_subject->$lang;
+      $_subject = node_load(intval($_subject[0]->target_id));
+      */
+      $_subject = $pers_rel_entity->field_pers_rel_subject[$lang];
+      $_subject = node_load(intval($_subject[0]['target_id']));
+
+      /**
+       * Load the term for the role within the personal relationship
+       */
+      $role_term = taxonomy_term_load($pers_rel_entity->field_pers_rel_role[$lang][0]['tid']);
+      
+      // Refactor
+      if(!array_key_exists($_subject->nid, $indexed_vertex_ids)) {
+
+	/**
+	 * For personal relationships, a more granular type of node is specified.
+	 */
+	$vertices[] = array('label' => $_subject->title,
+			    //'type' => $_subject->type
+			    'type' => $role_term->name
+			    );
+	
+	$indexed_vertex_ids[$_subject->nid] = sizeof($vertices) - 1;
+      }
+      
+      // Refactor
+      if(!array_key_exists($_object->nid, $indexed_vertex_ids)) {
+	
+	/**
+	 * For personal relationships, a more granular type of node is specified.
+	 */
+	$vertices[] = array('label' => $_object->title,
+			    //'type' => $_object->type
+			    'type' => 'Shareholder'
+			    );
+	
+	$indexed_vertex_ids[$_object->nid] = sizeof($vertices) - 1;
+      }
+
+      if(!array_key_exists($_subject->nid, $indexed_edges)) {
+	
+	$indexed_edges[$_subject->nid] = array($_object->nid => array('source' => $indexed_vertex_ids[$_subject->nid],
+								      //'target' => $subject_vertex_id + 1,
+								      //'target' => sizeof($vertices),
+								      'target' => $indexed_vertex_ids[$_object->nid],
+								      'weight' => 1,
+								      'type' => $role_term->name));
+	
+      } elseif(!array_key_exists($_object->nid, $indexed_edges[$_subject->nid])) {
+	
+	$indexed_edges[$_subject->nid][$_object->nid] = array(//'source' => $subject_vertex_id,
+							      'source' => $indexed_vertex_ids[$_subject->nid],
+							      //'target' => $subject_vertex_id + 1,
+								//'target' => sizeof($vertices),
+							      'target' => $indexed_vertex_ids[$_object->nid],
+							      'weight' => 1,
+							      'type' => $role_term->name);
+      } else {
+	
+	// Increase the weight for more than one loan for any given work
+	$indexed_edges[$_subject->nid][$_object->nid]['weight']++;
+      }
+    }
+  }
+
+  $edges = array();
+  
+  // Flatten the array for D3
+  foreach($indexed_edges as $subject_nid => $value) {
+    
+    foreach($value as $object_nid => $edge) {
+      
+      $edges[] = $edge;
+    }
+  }
+
+  // Wrap the Object with the appropriate metadata
+  return array('data' => array('nodes' => $vertices,
+			       'links' => $edges),
+	       'metadata' => array()
+	       );
+}
+
+function dss_elc_metrics_network($relationship_bundle, $nids, $min_date=NULL, $max_date=NULL) {
+
+  /**
+   * @todo To be integrated
+   */
+  //dss_elc_metrics_cache_call(array($relationship_bundle, $nids, $min_date=NULL, $max_date=NULL), '_dss_elc_metrics_network');
+}
+
+/**
+ * @author griffinj
+ * Visualizing bivariate analyses
+ *
+ */
+function dss_elc_metrics_get_bivariate_ajax() {
+
+  if(empty($_POST)) {
+
+    // Communicating using JSON
+
+    // The inputstream module should be utilized here in order to avoid breaking when more than one module accesses the stream concurrently:
+    $data = file_get_contents("php://input");
+    $data = json_decode($data, TRUE);
+
+    //$object = array();
+
+    drupal_json_output($data);
+  } else {
+
+    /*
+
+      data : [
+      { domain: 'subjectA', values: [ { sample: 'sampleA', value: 45 }, { sample: 'sampleB', value: 54 } ] },
+      { domain: 'subjectB', values: [ { sample: 'sampleA', value: 67 }, { sample: 'sampleB', value: 76 } ] },
+      { domain: 'subjectC', values: [ { sample: 'sampleA', value: 88 }, { sample: 'sampleB', value: 78 } ] } ],
+
+      metadata: [				       
+      { label: 'domain', type: 'temporal', axis: 'x' },
+      { label: 'value', type: 'ratio', axis: 'y' } ]
+      };
+    */
+
+    foreach(array('bundle_u', 'field_u', 'bundle_v', 'field_v', 'metric') as $param) {
+
+      if(array_key_exists($param, $_POST)) {
+
+	$data[$param] = $_POST[$param];
+	//$object[$param] = $_POST[$param];
+      }
+    }
+
+    /*
+    $data = array('data' => $data['data']
+			'metadata' => $data['metadata']);
+    */
+
+  }
+
+  if(!empty($data)) {
+
+    // The JSON must be normalized
+    if(array_keys($data) === array('bundle_u', 'field_u', 'bundle_v', 'field_v', 'metric')) {
+
+      drupal_json_output(dss_elc_metrics_bivariate($data['bundle_u'], $data['field_u'], $data['bundle_v'], $data['field_v'], $data['metric']));
+    }
+  }
+
+}
+
+/**
+ * @abstract
+ * Implementing a separate MongoDB cache for the Objects generated
+ *
+ */
+/*
+function dss_elc_metrics_cache_get($params, $callback, $force_update=FALSE) {
+
+  //$params = array('loan', array('125645'), '-5005047600', '-4859982000');
+
+  $collection = mongodb_collection('dss_elc_metrics');
+  $mongo_id = json_encode($params);
+
+  $data = $collection->findOne(array('_id' => $mongo_id));
+
+  if($force_update || (!$data || !isset($data['data']))) {
+
+    //$object = dss_elc_metrics_network('loan', array('125645'), '-5005047600', '-4859982000');
+    $object = call_user_func_array($callback, $params);
+
+    $doc = array('_id' => $mongo_id,
+		 'cid' => $mongo_id,
+		 //'created' => REQUEST_TIME,
+		 //'expire' => $expire,
+		 //'serialized' => !$scalar,
+		 //'data' => $scalar ? $data : serialize($data),
+		 'data' => $object);
+
+    $collection->save($doc);
+
+    $data = $object;
+  }
+
+  return $data;
+}
+*/
+
+/**
+ * @author griffinj
+ * Visualizing network analyses
+ *
+ */
+function dss_elc_metrics_get_network_ajax() {
+
+  if(empty($_POST)) {
+
+    // Communicating using JSON
+
+    // The inputstream module should be utilized here in order to avoid breaking when more than one module accesses the stream concurrently:
+    $data = file_get_contents("php://input");
+    $data = json_decode($data, TRUE);
+  } else {
+
+    // Refactor
+    foreach(array('bundle', 'subject_nids', 'limit') as $param) {
+
+      if(array_key_exists($param, $_POST)) {
+
+	$data[$param] = $_POST[$param];
+      }
+    }
+  }
+
+  if(!empty($data)) {
+
+    if(!array_key_exists('limit', $data)) {
+
+      $data['limit'] = NULL;
+    }
+
+    // The JSON must be normalized
+    if(array_keys($data) === array('bundle', 'subject_nids', 'limit')) {
+
+      // Normalize Drupal form data
+      if(gettype($data['subject_nids']) == 'string') {
+
+	$subject_nids = array();
+
+	foreach(preg_split('/\)/', $data['subject_nids']) as $value) {
+
+	  preg_match('/\((\d+)/', $value, $matches);
+	  $subject_nids[] = $matches[1];
+	}
+
+	$data['subject_nids'] = $subject_nids;
+      }
+
+      /*
+      // Normalize Drupal form data
+      if(array_key_exists('value2', $data['limit'])) {
+
+	$min_date = (float) $data['limit']['value'];
+	$max_date = (float) $data['limit']['value2'];
+
+	//$min_date = (string) (-5005047600000 + $min_date*259200000);
+	//$max_date = (string) (-4859982000000 - (560 - $max_date)*259200000);
+
+	$min_date = (string) (-5005047600 + $min_date*259200);
+	$max_date = (string) (-4859982000 - (560 - $max_date)*259200);
+      }
+      */
+
+      // Caching
+      //return drupal_json_output(dss_elc_metrics_network($data['bundle'], $data['subject_nids'], $min_date, $max_date));
+
+      if(array_key_exists('value2', $data['limit']) and array_key_exists('value', $data['limit'])) {
+
+	return drupal_json_output(_dss_elc_metrics_network($data['bundle'], $data['subject_nids'], $data['limit']['value'], $data['limit']['value2']));
+      } else {
+
+	return drupal_json_output(_dss_elc_metrics_network($data['bundle'], $data['subject_nids']));
+      }
+    }
+  }
+}
