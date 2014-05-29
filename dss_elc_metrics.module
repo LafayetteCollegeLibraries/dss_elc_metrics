@@ -1275,10 +1275,16 @@ function _dss_elc_metrics_network($relationship_bundle, $nids, $min=NULL, $max=N
 
       if(isset($max)) {
 
-	$min_date = date('c', $min);
-	$max_date = date('c', $max);
+	if($max < 0) {
 
-	$entity_query->fieldCondition('field_loan_duration', 'value', array((int) $max, (int) $min), 'BETWEEN');
+	  $min_date = date('c', $min);
+	  $max_date = date('c', $max);
+
+	  $entity_query->fieldCondition('field_loan_duration', 'value', array((int) $max, (int) $min), 'BETWEEN');
+	} else {
+
+	  $entity_query->range((int) $min - 1, (int) $max);
+	}
       }
 
       $entities = $entity_query->execute();
