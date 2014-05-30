@@ -49,7 +49,7 @@ function dss_elc_metrics_univariate_ajax($contentType = NULL, $field = NULL) {
   // Label mapping
   $info = field_info_instance('node', $field, $contentType);
 
-  $y_axis = array('label' => 'Loans',
+  $y_axis = array('label' => 'Quantity',
 		  'type' => 'ratio',
 		  'axis' => 'y');
 
@@ -2053,6 +2053,59 @@ function _dss_elc_metrics_network($relationship_bundle, $nids, $min=NULL, $max=N
       
       $edges[] = $edge;
     }
+  }
+
+  /**
+   * Ensure that, if nothing else, the nodes for the humans are visualized
+   */
+  if(empty($vertices)) {
+
+    foreach($nids as $nid) {
+
+      $node = node_load($nid);
+      if(isset($node->title)) {
+
+	$vertices[] = array('label' => $node->title,
+			    'type' => 'human');
+      }
+    }
+  }
+
+  /**
+   *
+   * Fixtures for development
+   * @todo Remove for testing
+   */
+
+  if($relationship_bundle == 'personal_relationship') {
+
+    $vertices[] = array('label' => '(Son)',
+			'type' => 'Child');
+    $edges[] = array('source' => count($vertices) - 1,
+		     'target' => 0,
+		     'weight' => 1,
+		     'type' => 'isChildOf');
+
+    $vertices[] = array('label' => '(Mother)',
+			'type' => 'Parent');
+    $edges[] = array('source' => count($vertices) - 1,
+		     'target' => 0,
+		     'weight' => 1,
+		     'type' => 'isParentOf');
+
+    $vertices[] = array('label' => '(Father)',
+			'type' => 'Parent');
+    $edges[] = array('source' => count($vertices) - 1,
+		     'target' => 0,
+		     'weight' => 1,
+		     'type' => 'isParentOf');
+
+    $vertices[] = array('label' => 'First Presbyterian Church',
+			'type' => 'Church');
+    $edges[] = array('source' => count($vertices) - 1,
+		     'target' => 0,
+		     'weight' => 1,
+		     'type' => 'isMemberOf');
   }
 
   // Wrap the Object with the appropriate metadata
