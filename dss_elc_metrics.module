@@ -888,43 +888,28 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $m
 			{ domain: 'subjectC', values: [ { sample: 'sampleA', value: 88 }, { sample: 'sampleB', value: 78 } ] } ],
    */
 
-  // Refactor
+  /**
+   * @todo Integrate MongoDB caching
+   *
+   */
   $mongo_id = 'quantitative';
   $collection_name = 'dss_elc_metrics_loans';
-
-  $loan_entities = dss_elc_metrics_cache_get($mongo_id, $collection_name);
-
-  /*
-  //if(!isset($loan_entities)) {
-  if(false) {
-
-    // Cache the loans
-    $entity_query = new EntityFieldQuery();
-    $entity_query->entityCondition('entity_type', 'node');
-    $entity_query->entityCondition('bundle', 'loan');
-    //$entity_query->fieldCondition('field_bib_rel_subject', 'target_id', $nids);
-    //$entity_query->fieldCondition('field_bib_rel_object', 'target_id', $nids);
-    
-    $entities = $entity_query->execute();
-    $loan_entities = node_load_multiple(array_keys($entities['node']));
-
-    dss_elc_metrics_cache_set($mongo_id, json_encode($loan_entities), $collection_name);
-  } else {
-
-  */
 
   // Cache the domains
   $mongo_id = $field_u;
   $collection_name = 'dss_elc_metrics_loans';
-  
+
   //$domains = dss_elc_metrics_cache_get($mongo_id, $collection_name);
+
+  /** @todo Integrate MongoDB caching */
+  /*
   $domains = dss_elc_metrics_cache_get_domains($field_u);
 
   if(!isset($domains)) {
     
     $domains = dss_elc_metrics_cache_domains($bundle_u, $field_u, $bundle_v, $field_v);
   }
-  //}
+  */
 
   $metrics = array();
 
@@ -940,6 +925,10 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $m
       $sample_values[] = array('sample' => $sample,
 			       'value' => $qty);
 
+      /**
+       * @todo Integrate with a remote service call to the QAS
+       *
+       */
       $metrics[$sample] = array('sample' => $sample,
 				'aMean' => mt_rand() / mt_getrandmax(),
 				'median' => '{ ' . (string) (mt_rand() / mt_getrandmax()) . ' }',
@@ -978,6 +967,7 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $m
   }
 
   // Wrap the Object with the appropriate metadata
+  /*
   return array('data' => $output,
 	       'metrics' => $metrics,
 	       'metadata' => array('x' => array('label' => $info_u['label'],
@@ -986,6 +976,7 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $m
 						'axis' => 'x'),
 				   'y' => $y_axis)
 	       );
+  */
   
   /**
    * Find all U entities related to V entities through relation R
@@ -1007,18 +998,23 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $m
   $query->fields('bib_rel_object', array('field_bib_rel_object_target_id'));
   $query->fields('bib_rel_subject', array('field_bib_rel_subject_target_id'));
   $query->fields('loan_duration', array('field_loan_duration_value', 'field_loan_duration_value2'));
+
+  /**
+   * Need limited data set for testing
+   * @todo Disable
+   */
+  $query->range(0,100);
   $records = $query->execute();
 
   $index = array();
   $json_record_values = array();
 
   /*
-$info = field_info_instance($entity_type, $field_name, $bundle_name);
+    $info = field_info_instance($entity_type, $field_name, $bundle_name);
 
-$label = $info['label'];
+    $label = $info['label'];
    */
 
-  /*
   foreach($records as $record) {
 
     $_object = node_load($record->field_bib_rel_object_target_id);
@@ -1047,8 +1043,8 @@ $label = $info['label'];
      * Book/Periodical/Item: field_item_format
      * Human: field_human_gender
      *
-     * /
-    $_field_v = $_subject->$field_v;
+     */
+     $_field_v = $_subject->$field_v;
 
     // Refactor
     if(empty($_subject->$field_v)) {
@@ -1201,7 +1197,6 @@ $label = $info['label'];
 			'values' => $sample_values);
     }
   }
-  */
 
   // Refactor
   // Label mapping
@@ -1249,7 +1244,12 @@ $label = $info['label'];
 
 function dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $metric) {
   
-  dss_elc_metrics_cache_call(array($bundle_u, $field_u, $bundle_v, $field_v, $metric), '_dss_elc_metrics_bivariate');
+  /**
+   * Disabling caching for the moment
+   */
+  //dss_elc_metrics_cache_call(array($bundle_u, $field_u, $bundle_v, $field_v, $metric), '_dss_elc_metrics_bivariate');
+
+  return _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $metric);
 }
 
 function _dss_elc_metrics_network($relationship_bundle, $nids, $min=NULL, $max=NULL) {
