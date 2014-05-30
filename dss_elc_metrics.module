@@ -11,6 +11,9 @@ function dss_elc_metrics_menu() {
 				    'page callback' => 'dss_elc_metrics_get_node_metrics_ajax',
 				    'access callback' => TRUE,
 				    ),
+		 'metrics/univariate' => array(
+					       'page callback' => 'dss_elc_metrics_univariate_ajax',
+					       'access callback' => TRUE),
 		 'bivariate' => array(
 				      'page callback' => 'dss_elc_metrics_get_bivariate_ajax',
 				      'access callback' => TRUE),
@@ -30,6 +33,507 @@ function dss_elc_metrics_menu() {
   return $items;
 }
 
+function dss_elc_metrics_univariate_ajax($contentType = NULL, $field = NULL) {
+
+  // bundle=human&field=field_human_occupation
+  $contentType = array_key_exists('bundle', $_POST) ? $_POST['bundle'] : $contentType;
+  $field = array_key_exists('field', $_POST) ? $_POST['field'] : $field;
+
+  if(!isset($field) || !isset($contentType)) {
+
+    drupal_json_output(array());
+    return;
+  }
+
+  // Refactor
+  // Label mapping
+  $info = field_info_instance('node', $field, $contentType);
+
+  $y_axis = array('label' => 'Loans',
+		  'type' => 'ratio',
+		  'axis' => 'y');
+
+  /**
+   * @todo Refactor for different types of metrics (e. g. summation, median, mode...)
+   *
+   */
+  if(true) {
+
+    $y_axis['property'] = 'value';
+  }
+
+  // First, retrieve every entity with this relationship
+  $entity_query = new EntityFieldQuery();
+  $entity_query->entityCondition('entity_type', 'node');
+  $entity_query->entityCondition('bundle', $contentType);
+  $entity_query->range(0,100);
+  $results = $entity_query->execute();
+  //$_object = node_load(array_pop(array_keys($entities['node'])));
+
+  $data = array();
+  /**
+   * {"data":[
+   * {"domain":" Buffon, Georges Louis Leclerc, Comte de","values":[{"sample":"Unknown","value":8}]},
+   * {"domain":"Campbell, Donald ","values":[{"sample":"Unknown","value":2}]}
+   */
+
+  foreach(entity_load('node', array_keys($results['node'])) as $entity) {
+
+    //$field_value = empty($entity->$field) ? 'Unknown' : $entity->$field[0];
+    if(empty($entity->$field)) {
+
+      $field_value = 'Unknown';
+    } else {
+
+      $field_value = $entity->$field;
+      $field_value = $field_value[0];
+    }
+
+    if(!array_key_exists($field_value, $data)) {
+
+      $data[$field_value] = 1;
+    } else {
+
+      $data[$field_value] += 1;
+    }
+  }
+
+  // Linear transformation for D3
+  $output_data = array();
+  $metrics = array();
+
+  foreach($data as $field_value => $quantity) {
+
+    $output_data[] = array('domain' => $field_value,
+			   'values' => array(array('sample' => $field_value,
+						   'value' => $quantity)));
+
+    /**
+     * @todo Integrate with a remote service call to the QAS
+     *
+     */
+    $metrics[$field_value] = array('sample' => $field_value,
+				   'aMean' => mt_rand() / mt_getrandmax(),
+				   'median' => '{ ' . (string) (mt_rand() / mt_getrandmax()) . ' }',
+				   'mode' => mt_rand() / mt_getrandmax(),
+				   'kurtosisPearson' => mt_rand() / mt_getrandmax(),
+				   'kurtosisFisher' => mt_rand() / mt_getrandmax(),
+				   'distribution' => 'Poisson');
+  }
+
+  /**
+   * Test data
+   * @todo Remove
+   */
+
+  foreach(array('Alpha', 'Beta', 'Gamma') as $test_value) {
+
+    $output_data[] = array('domain' => $test_value,
+			   'values' => array(array('sample' => $test_value,
+						   'value' => rand(1, 100))));
+    
+    $metrics[$test_value] = array('sample' => $test_value,
+				  'aMean' => mt_rand() / mt_getrandmax(),
+				  'median' => '{ ' . (string) (mt_rand() / mt_getrandmax()) . ' }',
+				  'mode' => mt_rand() / mt_getrandmax(),
+				  'kurtosisPearson' => mt_rand() / mt_getrandmax(),
+				  'kurtosisFisher' => mt_rand() / mt_getrandmax(),
+				  'distribution' => 'Poisson');
+  }
+
+
+  $output = array('data' => $output_data,
+		  'metrics' => $metrics,
+		  'metadata' => array('x' => array('label' => $info['label'],
+						   'property' => 'domain',
+						   'type' => $scale_type ? $scale_type : 'nominal',
+						   'axis' => 'x'),
+				      'y' => $y_axis)
+		  );
+
+  drupal_json_output($output);
+}
+
+function __dss_elc_metrics_univariate_ajax($contentType = NULL, $field = NULL) {
+
+  if(true) {
+
+    return 'trace';
+  }
+
+  // bundle=human&field=field_human_occupation
+  $contentType = array_key_exists('bundle', $_POST) ? $_POST['bundle'] : $contentType;
+  $field = array_key_exists('field', $_POST) ? $_POST['field'] : $field;
+
+  if(!isset($field) || !isset($contentType)) {
+
+    drupal_json_output(array());
+    return;
+  }
+
+  /**
+   * @todo Integrate MongoDB caching
+   *
+   */
+  $mongo_id = 'quantitative';
+  $collection_name = 'dss_elc_metrics_loans';
+
+  // Cache the domains
+  $mongo_id = $field_u;
+  $collection_name = 'dss_elc_metrics_loans';
+
+  //$domains = dss_elc_metrics_cache_get($mongo_id, $collection_name);
+
+  /** @todo Integrate MongoDB caching */
+  /*
+  $domains = dss_elc_metrics_cache_get_domains($field_u);
+
+  if(!isset($domains)) {
+    
+    $domains = dss_elc_metrics_cache_domains($bundle_u, $field_u, $bundle_v, $field_v);
+  }
+  */
+
+  $metrics = array();
+
+  // Apply a linear transform for D3
+  $output = array();
+
+  foreach($domains as $domain => $samples) {
+
+    $sample_values = array();
+    
+    foreach($samples as $sample => $qty) {
+      
+      $sample_values[] = array('sample' => $sample,
+			       'value' => $qty);
+
+      /**
+       * @todo Integrate with a remote service call to the QAS
+       *
+       */
+      $metrics[$sample] = array('sample' => $sample,
+				'aMean' => mt_rand() / mt_getrandmax(),
+				'median' => '{ ' . (string) (mt_rand() / mt_getrandmax()) . ' }',
+				'mode' => mt_rand() / mt_getrandmax(),
+				'kurtosisPearson' => mt_rand() / mt_getrandmax(),
+				'kurtosisFisher' => mt_rand() / mt_getrandmax(),
+				'distribution' => 'Poisson');
+    }
+
+    // Refactor
+    if($field_u == 'field_loan_duration') {
+     
+      // Work-around
+      $output[] = array('domain' => (string) $domain,
+			'values' => $sample_values);
+    } else {
+
+      $output[] = array('domain' => $domain,
+			'values' => $sample_values);
+    }
+  }
+
+  // Refactor
+  // Label mapping
+  $info = field_info_instance('node', $field, $contentType);
+
+  $y_axis = array('label' => $info['label'],
+		  'type' => 'ratio',
+		  'axis' => 'y');
+
+  /**
+   * @todo Refactor for different types of metrics (e. g. summation, median, mode...)
+   *
+   */
+  if(true) {
+
+    $y_axis['property'] = 'value';
+  }
+
+  /*
+	       'metadata' => array('x' => array('label' => $info_u['label'],
+						'property' => 'domain',
+						'type' => $scale_type ? $scale_type : 'nominal',
+						'axis' => 'x'),
+				   'y' => $y_axis)
+   */
+
+  // Wrap the Object with the appropriate metadata
+  /*
+  return array('data' => $output,
+	       'metrics' => $metrics,
+	       'metadata' => array('x' => array('label' => $info_u['label'],
+						'property' => 'domain',
+						'type' => $scale_type ? $scale_type : 'nominal',
+						'axis' => 'x'),
+				   'y' => $y_axis)
+	       );
+  */
+  
+  /**
+   * Find all U entities related to V entities through relation R
+   * This should be a simple SPARQL query, but ARC2 doesn't support PostgreSQL
+   *
+   */
+
+  // First, retrieve every entity with this relationship
+  $entity_query = new EntityFieldQuery();
+  $entity_query->entityCondition('entity_type', 'node');
+  //$entity_query->fieldCondition('field_item_embodies', 'target_id', $_object->nid, '=');
+  $entities = $entity_query->execute();
+  $_object = node_load(array_pop(array_keys($entities['node'])));
+
+  // Retrieve all bundles from the ELC database sorted by the values for the field
+
+  //$query = db_select('node', 'n');
+
+  /*
+  $query->join("field_data_field_bib_rel_object", 'bib_rel_object', 'bib_rel_object.field_bib_rel_object_target_id=n.nid'); // Retrieve all field records for all NID's specified in the book loan records
+  $query->join('node', 'loan', 'loan.nid=bib_rel_object.entity_id'); // Retrieve all related loan records
+  $query->join("field_data_field_bib_rel_subject", 'bib_rel_subject', 'bib_rel_subject.entity_id=loan.nid'); // Retrieve all borrowers
+  $query->join("field_data_field_loan_duration", 'loan_duration', 'loan_duration.entity_id=loan.nid'); // Retrieve the duration of the loan
+  */
+
+  //$query->condition('n.type', $contentType, '=');
+
+  /*
+  $query->fields('bib_rel_object', array('field_bib_rel_object_target_id'));
+  $query->fields('bib_rel_subject', array('field_bib_rel_subject_target_id'));
+  $query->fields('loan_duration', array('field_loan_duration_value', 'field_loan_duration_value2'));
+  */
+
+  /**
+   * Need limited data set for testing
+   * @todo Disable
+   */
+  //$query->range(0,10);
+  //$records = $query->execute();
+
+  if(true) {
+
+    return $records;
+  }
+
+  $index = array();
+  $json_record_values = array();
+
+  /*
+    $info = field_info_instance($entity_type, $field_name, $bundle_name);
+
+    $label = $info['label'];
+   */
+
+  foreach($records as $record) {
+
+    $_object = node_load($record->field_bib_rel_object_target_id);
+
+    // If this is a manifestation, retrieve the original work
+    if($_object->type == 'manifestation') {
+
+      $entity_query = new EntityFieldQuery();
+      $entity_query->entityCondition('entity_type', 'node');
+      $entity_query->fieldCondition('field_item_embodies', 'target_id', $_object->nid, '=');
+      $entities = $entity_query->execute();
+
+      $_object = node_load(array_pop(array_keys($entities['node'])));
+    }
+
+    // Refactor
+    if($field_u != 'field_loan_duration') {
+
+      $_field_u = $_object->$field_u;
+    }
+
+    $_subject = node_load($record->field_bib_rel_subject_target_id);
+
+    /**
+     * @note Handling for List fields
+     * Book/Periodical/Item: field_item_format
+     * Human: field_human_gender
+     *
+     */
+    $_field_v = $_subject->$field_v;
+
+    // Refactor
+    if(empty($_subject->$field_v)) {
+
+      $_sample_name = 'Unknown';
+    } else {
+      
+      if($field_v == 'field_human_gender') {
+
+	$_field = field_info_field($field_v);
+	$_values = list_allowed_values($_field);
+	$_sample_name = array_pop($_field_v['und']);
+	$_sample_name = $_values[$_sample_name['value']];
+      } elseif($field_v == 'field_person_location' ||
+	       $field_v == 'field_person_membership') {
+	
+	$entity_id = array_pop($_field_v['und']);
+	$entity = node_load($entity_id['target_id']);
+	
+	$_sample_name = $entity->title;
+      }
+    }
+    
+    // For NULL List field values
+    if(!$_sample_name) {
+      
+      $_sample_name = 'Unknown';
+    }
+
+    // Term Reference fields
+    // Refactor for array
+    if($field_u == 'field_human_occupation' ||
+       $field_u == 'field_person_type' ||
+       $field_u == 'field_item_subject' ||
+       $field_u == 'field_artifact_type') {
+      
+      // For the handling of NULL values
+      if(!$_field_u) {
+	
+	$_field_u = array('und' => array('Unknown'));
+      }
+      
+      foreach($_field_u['und'] as $term) {
+	  
+	if(!array_key_exists('tid', $term)) {
+	  
+	  $domain = 'Unknown';
+	} else {
+
+	  $term = taxonomy_term_load($term['tid']);
+	  $domain = $term->name;
+	}
+
+	if(!array_key_exists($domain, $json_record_values)) {
+
+	  $json_record_values[$domain] = array($_sample_name => 1);	  
+	} else {
+	  
+	  $json_record_values[$domain][$_sample_name]++;
+	}
+      }
+    } elseif($field_u == 'field_artifact_was_authored_by') { // Entity References
+      
+      $entity_id = array_pop($_field_u['und']);
+      $entity = node_load($entity_id['target_id']);
+      
+      $domain = $entity->field_person_name['und'][0]['value'];
+      
+      // Refactor
+      if(!array_key_exists($domain, $json_record_values)) {
+	
+	$json_record_values[$domain] = array($_sample_name => 1);
+      } else {
+	
+	$json_record_values[$domain][$_sample_name]++;
+      }
+    } elseif($field_u == 'field_item_format') { // Refactor
+
+      $_field = field_info_field($field_u);
+      $_values = list_allowed_values($_field);
+      $_domain = array_pop($_field_u['und']);
+      $domain = $_values[$_domain['value']];
+
+      // For NULL values
+      if(!$domain) {
+
+	$domain = 'Unknown';
+      }
+
+      // Refactor
+      if(!array_key_exists($domain, $json_record_values)) {
+	
+	$json_record_values[$domain] = array($_sample_name => 1);
+      } else {
+	
+	$json_record_values[$domain][$_sample_name]++;
+      }
+    } elseif($field == 'field_loan_duration') { // Loan duration
+
+      // Parse from a UNIX timestamp
+      $domain = $record->field_loan_duration_value;
+      $date = new DateObject($domain);
+      $domain = $date->format('Ymd');
+
+      // Refactor
+      if(!array_key_exists($domain, $json_record_values)) {
+	
+	$json_record_values[$domain] = array($_sample_name => 1);
+      } else {
+	
+	$json_record_values[$domain][$_sample_name]++;
+      }
+
+      // Also, set the type of scale to "temporal"
+      $scale_type = 'temporal';
+    }
+  }
+
+  $metrics = array();
+
+  // Apply a linear transform for D3
+  $output = array();
+  foreach($json_record_values as $domain => $samples) {
+
+    $sample_values = array();
+    
+    foreach($samples as $sample => $qty) {
+      
+      $sample_values[] = array('sample' => $sample,
+			       'value' => $qty);
+
+      $metrics[$sample] = array('sample' => $sample,
+				'aMean' => mt_rand() / mt_getrandmax(),
+				'median' => '{ ' . (string) (mt_rand() / mt_getrandmax()) . ' }',
+				'mode' => mt_rand() / mt_getrandmax(),
+				'kurtosisPearson' => mt_rand() / mt_getrandmax(),
+				'kurtosisFisher' => mt_rand() / mt_getrandmax(),
+				'distribution' => 'Poisson');
+    }
+
+    // Refactor
+    if($field_u == 'field_loan_duration') {
+     
+      // Work-around
+      $output[] = array('domain' => (string) $domain,
+			'values' => $sample_values);
+    } else {
+
+      $output[] = array('domain' => $domain,
+			'values' => $sample_values);
+    }
+  }
+
+  // Refactor
+  // Label mapping
+  $info_u = field_info_instance('node', $field_u, $field_u == 'field_loan_duration' ? 'loan' : 'item');
+  $info_v = field_info_instance('node', $field_v, 'human');
+
+  $y_axis = array('label' => 'Loans',
+		  'type' => 'ratio',
+		  'axis' => 'y');
+
+  // Refactor
+  //if($field_u != 'field_loan_duration') {
+  if(true) {
+
+    $y_axis['property'] = 'value';
+  }
+
+  // Wrap the Object with the appropriate metadata
+  return array('data' => $output,
+	       'metrics' => $metrics,
+	       'metadata' => array('x' => array('label' => $info_u['label'],
+						'property' => 'domain',
+						'type' => $scale_type ? $scale_type : 'nominal',
+						'axis' => 'x'),
+				   'y' => $y_axis)
+	       );
+}
+
 /**
  * @author griffinj@lafayette.edu
  *
@@ -44,7 +548,11 @@ function dss_elc_metrics_menu() {
  * Case: Analyze books by type
  *
  */
-function dss_elc_metrics_get_node_metrics_ajax($contentType, $field) {
+function _dss_elc_metrics_get_node_metrics_ajax($contentType = NULL, $field = NULL) {
+
+  // bundle=human&field=field_human_occupation
+  $contentType = array_key_exists('bundle', $_POST) ? $_POST['bundle'] : $contentType;
+  $field = array_key_exists('field', $_POST) ? $_POST['field'] : $field;
 
   if(!isset($field) || !isset($contentType)) {
 
@@ -71,6 +579,12 @@ function dss_elc_metrics_get_node_metrics_ajax($contentType, $field) {
 
     $field = $FIELD_NAME_MAP[$field];
   }
+
+  /**
+"metadata":{
+"x":{"label":"Author(s)","property":"domain","type":"nominal","axis":"x"},
+"y":{"label":"Loans","type":"ratio","axis":"y","property":"value"}}}
+   */
 
   if($contentType == 'human') {
 
@@ -339,6 +853,18 @@ Miscellaneous Works                                              |
       }
     }
   }
+
+  /**
+  // Wrap the Object with the appropriate metadata
+  return array('data' => $output,
+	       'metrics' => $metrics,
+	       'metadata' => array('x' => array('label' => $info_u['label'],
+						'property' => 'domain',
+						'type' => $scale_type ? $scale_type : 'nominal',
+						'axis' => 'x'),
+				   'y' => $y_axis)
+	       );
+  **/
 
   // For D3
   foreach($index as $key => &$value) {
