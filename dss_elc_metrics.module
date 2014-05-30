@@ -2100,6 +2100,27 @@ function _dss_elc_metrics_network($relationship_bundle, $nids, $min=NULL, $max=N
 		     'weight' => 1,
 		     'type' => 'isParentOf');
 
+    $vertices[] = array('label' => '(Employee)',
+			'type' => 'Employee');
+    $edges[] = array('source' => count($vertices) - 1,
+		     'target' => 0,
+		     'weight' => 1,
+		     'type' => 'hasEmployee');
+
+    $vertices[] = array('label' => '(Servant)',
+			'type' => 'Servant');
+    $edges[] = array('source' => count($vertices) - 1,
+		     'target' => 0,
+		     'weight' => 1,
+		     'type' => 'hasServant');
+
+    $vertices[] = array('label' => '(Brother)',
+			'type' => 'Sibling');
+    $edges[] = array('source' => count($vertices) - 1,
+		     'target' => 0,
+		     'weight' => 1,
+		     'type' => 'isSiblingOf');
+
     $vertices[] = array('label' => 'First Presbyterian Church',
 			'type' => 'Church');
     $edges[] = array('source' => count($vertices) - 1,
