@@ -20,14 +20,22 @@ function dss_elc_metrics_menu() {
 		 'network' => array(
 				    'page callback' => 'dss_elc_metrics_get_network_ajax',
 				    'access callback' => TRUE),
-		 'loaned/items' => array(
-					 'page callback' => 'dss_elc_metrics_get_items_loaned_ajax',
-					 'access callback' => TRUE,
-					 ),
-		 'persons/loaned/items' => array(
-						 'page callback' => 'dss_elc_metrics_get_items_loaned_persons_ajax',
+//		 'loaned/items' => array(
+//					 'page callback' => 'dss_elc_metrics_get_items_loaned_ajax',
+//					 'access callback' => TRUE,
+//					 ),
+//		 'persons/loaned/items' => array(
+//						 'page callback' => 'dss_elc_metrics_get_items_loaned_persons_ajax',
+//						 'access callback' => TRUE,
+//						 ),
+		 'datatable_person/views/people' => array(
+		 		 		 'page callback' => 'dss_elc_metrics_get_people',
 						 'access callback' => TRUE,
-						 ),
+		 				 ),
+		 'datatable_item/views/items' => array(
+		 				 'page callback' => 'dss_elc_metrics_get_items',
+		 				 'access callback' => TRUE,
+		 				 ),				 
 		 );
 
   return $items;
@@ -2318,4 +2326,228 @@ function dss_elc_metrics_get_network_ajax() {
       }
     }
   }
+}
+
+/*
+ * Function for server-side pre-processing of the the browse people functionality of the website.
+ * this returns a JSON object which will be sent to the webpage for DataTables implementation.
+ */
+function dss_elc_metrics_get_people(){
+
+	$query = new EntityFieldQuery();
+	
+	//choosing which column has been clicked for sorting
+	switch($_GET['order']['0']['column']){
+		
+		case 0://author
+			$sort_value = 'title';
+			break;
+			
+		case 1://title
+			$sort_value = 'changed';
+			break;
+
+		default:
+			$sort_value = 'title';
+			break;
+		
+	}
+		
+	//query for getting human nodes in the sorted in the specified order
+	$query->addMetaData('account', user_load(1))
+	->entityCondition('entity_type','node')
+	->entityCondition('bundle','human')
+	->propertyOrderBy($sort_value,$_GET['order']['0']['dir']);	
+	if($_GET['columns']['0']['search']['value'] != ''){
+		
+		$query->fieldCondition('field_person_name', 'value', $_GET['columns']['0']['search']['value'],'CONTAINS');
+		
+	}
+	
+	$result = $query->range(intval($_GET['start']),intval($_GET['start'])+intval($_GET['length']))
+			  ->execute();
+	//loading nodes from query
+    $nodes = entity_load('node', array_keys($result['node']));
+	//query only for determining iTotalDisplayRecords and iTotalRecords -- these will be different once search is implemented
+	$total_query = new EntityFieldQuery();
+	
+	//correctly formatting the JSON return object metadata
+	$datatable_json =  array(
+	    "draw" => intval($_GET['draw'])+1,
+	    "iTotalRecords" => intval($total_query
+	    	->entityCondition('entity_type','node')
+			->entityCondition('bundle','human')
+			->count()
+			->execute()),
+	    "iTotalDisplayRecords" => $total_query->execute(),
+	    "aaData" => array() 	  
+	     );
+		 
+	//correctly formatting the JSON return object aaData
+	$count = 0;
+	
+	foreach ($nodes as $key => $value) {
+		if(isset($value)){	
+			$datatable_json['aaData'][$count] = array($value->title,$value->revision_timestamp,$value->nid,$value->nid);
+		}
+		else{
+			$datatable_json['aaData'][$count] = array('');
+		}
+		$count++;
+	}
+	
+	return drupal_json_output($datatable_json);
+	
+}
+
+/*
+ * Function for server-side pre-processing of the the browse items functionality of the website.
+ * this returns a json object wnich will be sent to the webpage for DataTables implementation.
+ */
+function dss_elc_metrics_get_items(){
+	
+	//Declaring query object
+	$query = new EntityFieldQuery();
+	
+	//choosing which column has been clicked for sorting
+	switch($_GET['order']['0']['column']){
+		
+		case 0://author
+			$sort_value = 'field_artifact_was_authored_by';
+			break;
+			
+		case 1://title
+			$sort_value = 'title';
+			break;
+			
+		//not implemented only sorting by title still -- will likely be removed
+		case 2://vols.
+			$sort_value = 'title';
+			break;
+		
+		//implemented, only because it was quickly do-able. As type is a column in the database for books
+		case 3://type
+			$sort_value = 'type';
+			break;
+			
+		//not implemented only sorting by title still -- will likely be removed
+		case 4://subject
+			$sort_value = 'title';
+			break;
+			
+		case 5://modified
+			$sort_value = 'changed';
+			break;
+			
+		default:
+			$sort_value = 'title';
+			break;
+		
+	}
+	//If we are getting any column other than author, do this
+	if($sort_value != 'field_artifact_was_authored_by'){
+		//query for getting books sorted in the appropriate way
+		$query->addMetaData('account', user_load(1))
+		->entityCondition('entity_type','node')
+		->entityCondition('bundle','book')
+		->propertyOrderBy($sort_value,$_GET['order']['0']['dir']);
+		
+		if(trim($_GET['columns']['1']['search']['value'])!=''){
+			$query->fieldCondition('field_artifact_title', 'value', $_GET['columns']['1']['search']['value'],'CONTAINS');
+		
+		}
+		
+		$result = $query->execute();
+		
+		//load the nodes
+		$nodes = entity_load('node', array_keys($result['node']));
+		
+		if(trim($_GET['columns']['0']['search']['value'])!=''){
+			$nodes = array_filter($nodes, function($var){
+				
+					$author_node = entity_load('node', array($var->field_artifact_was_authored_by['und'][0]['target_id']));
+					return stristr($author_node[$var->field_artifact_was_authored_by['und'][0]['target_id']]->title, $_GET['columns']['0']['search']['value']);
+					
+			});
+		}	
+		$nodes = array_slice($nodes, intval($_GET['start']),intval($_GET['length']));
+	  
+	}
+	//If we are getting the author
+	else{
+		
+		//getting a query for all books
+		$result = $query->entityCondition('entity_type','node')
+		->entityCondition('bundle','book')
+		->execute();
+		
+		//loading nodes from book query
+		$test = entity_load('node', array_keys($result['node']));
+		
+		//sort all of the books by getting author names and compare them
+		usort($test,function($a,$b){
+			
+			$author_node_a = entity_load('node', array($a->field_artifact_was_authored_by['und'][0]['target_id']));
+			$author_node_b = entity_load('node', array($b->field_artifact_was_authored_by['und'][0]['target_id']));
+			return strcasecmp(trim($author_node_a[$a->field_artifact_was_authored_by['und'][0]['target_id']]->title), trim($author_node_b[$b->field_artifact_was_authored_by['und'][0]['target_id']]->title));
+			
+		});
+		
+		//emptys the array of all nodes which do not contain the search value
+		if(trim($_GET['columns']['0']['search']['value'])!=''){
+			$test = array_filter($test, function($var){
+				
+					$author_node = entity_load('node', array($var->field_artifact_was_authored_by['und'][0]['target_id']));
+					return stristr($author_node[$var->field_artifact_was_authored_by['und'][0]['target_id']]->title, $_GET['columns']['0']['search']['value']);
+					
+			});
+			
+		}
+		elseif(trim($_GET['columns']['1']['search']['value'])!=''){
+			$test = array_filter($test,function($var){
+			
+				return stristr($var->title,$_GET['columns']['1']['search']['value']);
+			
+			});
+		}
+		
+		$nodes = $test;
+		
+		//get only the cache size worth of objects
+		if($_GET['order']['0']['dir']=='desc'){
+			$nodes = array_reverse($nodes);
+		}
+		$nodes = array_slice($nodes, intval($_GET['start']),intval($_GET['length']));
+	
+	}
+    //a query for determining the total number of results, used only for iTotalDisplayRecords and iTotalRecords These will be different once searching is implemented
+	$total_query = new EntityFieldQuery();
+	
+	//correctly formatting the JSON return object metadata
+	$datatable_json =  array(
+	    "draw" => intval($_GET['draw'])+1,
+	    "iTotalRecords" => intval($total_query
+	    	->entityCondition('entity_type','node')
+			->entityCondition('bundle','book')
+			->count()
+			->execute()),
+	    "iTotalDisplayRecords" => $total_query->execute(),
+	    "aaData" => array() 	  
+	     );
+		 
+	//correctly formatting the JSON return object aaData
+	$count = 0;
+	foreach ($nodes as $key => $value) {
+		if(isset($value)){
+			$author_node = entity_load('node', array($value->field_artifact_was_authored_by['und'][0]['target_id']));
+			$datatable_json['aaData'][$count] = array($author_node[$value->field_artifact_was_authored_by['und'][0]['target_id']]->title,$value->title,$value->field_item_volume['und'][0]['tid'],'item',$value->field_item_subject['und'][0]['value'],$value->revision_timestamp,$value->nid,$value->nid);
+		}
+		else{
+			$datatable_json['aaData'][$count] = array('');
+		}
+		$count++;
+	}
+
+	return drupal_json_output($datatable_json);
+	
 }
