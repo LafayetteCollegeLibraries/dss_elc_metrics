@@ -2496,7 +2496,7 @@ function dss_elc_metrics_get_items(){
 		//emptys the array of all nodes which do not contain the search value
 		if(trim($_GET['columns']['0']['search']['value'])!=''){
 			$test = array_filter($test, function($var){
-				
+				 
 					$author_node = entity_load('node', array($var->field_artifact_was_authored_by['und'][0]['target_id']));
 					return stristr($author_node[$var->field_artifact_was_authored_by['und'][0]['target_id']]->title, $_GET['columns']['0']['search']['value']);
 					
