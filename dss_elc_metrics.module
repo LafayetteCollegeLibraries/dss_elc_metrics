@@ -41,13 +41,12 @@ function dss_elc_metrics_menu() {
   return $items;
 }
 
-function dss_elc_metrics_univariate_ajax($contentType = NULL, $field = NULL) {
+function dss_elc_metrics_univariate_ajax($content_type = NULL, $field = NULL) {
 
-  // bundle=human&field=field_human_occupation
-  $contentType = array_key_exists('bundle', $_POST) ? $_POST['bundle'] : $contentType;
+  $content_type = array_key_exists('bundle', $_POST) ? $_POST['bundle'] : $content_type;
   $field = array_key_exists('field', $_POST) ? $_POST['field'] : $field;
 
-  if(!isset($field) || !isset($contentType)) {
+  if(!isset($field) || !isset($content_type)) {
 
     drupal_json_output(array());
     return;
@@ -55,7 +54,7 @@ function dss_elc_metrics_univariate_ajax($contentType = NULL, $field = NULL) {
 
   // Refactor
   // Label mapping
-  $info = field_info_instance('node', $field, $contentType);
+  $info = field_info_instance('node', $field, $content_type);
 
   $y_axis = array('label' => 'Quantity',
 		  'type' => 'ratio',
@@ -73,7 +72,7 @@ function dss_elc_metrics_univariate_ajax($contentType = NULL, $field = NULL) {
   // First, retrieve every entity with this relationship
   $entity_query = new EntityFieldQuery();
   $entity_query->entityCondition('entity_type', 'node');
-  $entity_query->entityCondition('bundle', $contentType);
+  $entity_query->entityCondition('bundle', $content_type);
   $entity_query->range(0,100);
   $results = $entity_query->execute();
   //$_object = node_load(array_pop(array_keys($entities['node'])));
@@ -85,6 +84,11 @@ function dss_elc_metrics_univariate_ajax($contentType = NULL, $field = NULL) {
    * {"domain":"Campbell, Donald ","values":[{"sample":"Unknown","value":2}]}
    */
 
+  /**
+   * @todo Refactor
+   */
+  $DSS_ELC_TAXON_FIELDS = array('field_item_subject');
+
   foreach(entity_load('node', array_keys($results['node'])) as $entity) {
 
     //$field_value = empty($entity->$field) ? 'Unknown' : $entity->$field[0];
@@ -93,8 +97,14 @@ function dss_elc_metrics_univariate_ajax($contentType = NULL, $field = NULL) {
       $field_value = 'Unknown';
     } else {
 
-      $field_value = $entity->$field;
-      $field_value = $field_value[0];
+      //if(in_array($field, )) {
+      if(true) {
+
+      } else {
+
+	$field_value = $entity->$field;
+	$field_value = $field_value[0];
+      }
     }
 
     if(!array_key_exists($field_value, $data)) {
@@ -105,6 +115,8 @@ function dss_elc_metrics_univariate_ajax($contentType = NULL, $field = NULL) {
       $data[$field_value] += 1;
     }
   }
+
+  print json_encode($data);
 
   // Linear transformation for D3
   $output_data = array();
@@ -134,6 +146,7 @@ function dss_elc_metrics_univariate_ajax($contentType = NULL, $field = NULL) {
    * @todo Remove
    */
 
+  /*
   foreach(array('Alpha', 'Beta', 'Gamma') as $test_value) {
 
     $output_data[] = array('domain' => $test_value,
@@ -148,6 +161,7 @@ function dss_elc_metrics_univariate_ajax($contentType = NULL, $field = NULL) {
 				  'kurtosisFisher' => mt_rand() / mt_getrandmax(),
 				  'distribution' => 'Poisson');
   }
+  */
 
 
   $output = array('data' => $output_data,
