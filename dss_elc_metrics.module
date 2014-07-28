@@ -35,7 +35,11 @@ function dss_elc_metrics_menu() {
 		 'datatable_item/views/items' => array(
 		 				 'page callback' => 'dss_elc_metrics_get_items',
 		 				 'access callback' => TRUE,
-		 				 ),				 
+		 				 ),		
+		 'datatable_loan/views/loans' => array(
+		 				 'page callback' => 'dss_elc_metrics_get_loans',
+		 				 'access callback' => TRUE,
+		 				 ),				 		 
 		 );
 
   return $items;
@@ -2363,13 +2367,28 @@ function dss_elc_metrics_get_people(){
 		$query->fieldCondition('field_person_name', 'value', $_GET['columns']['0']['search']['value'],'CONTAINS');
 		
 	}
+	//implement this with radio button when it is created
+	if(true){
+		$query->fieldCondition('field_person_type','tid','230','!=');
+	}
 	
+	//count the number of items that are displayed witht these search values
+	$display_size = count($query->execute());
+	
+	//get only the cache size worth of people
 	$result = $query->range(intval($_GET['start']),intval($_GET['start'])+intval($_GET['length']))
 			  ->execute();
+			  
 	//loading nodes from query
     $nodes = entity_load('node', array_keys($result['node']));
+	
 	//query only for determining iTotalDisplayRecords and iTotalRecords -- these will be different once search is implemented
 	$total_query = new EntityFieldQuery();
+	
+	//implement this with radio button when it is created
+	if(true){
+		$total_query->fieldCondition('field_person_type','tid','230','!=');
+	}
 	
 	//correctly formatting the JSON return object metadata
 	$datatable_json =  array(
@@ -2379,7 +2398,7 @@ function dss_elc_metrics_get_people(){
 			->entityCondition('bundle','human')
 			->count()
 			->execute()),
-	    "iTotalDisplayRecords" => $total_query->execute(),
+	    "iTotalDisplayRecords" => $display_size,
 	    "aaData" => array() 	  
 	     );
 		 
@@ -2410,7 +2429,7 @@ function dss_elc_metrics_get_items(){
 	$query = new EntityFieldQuery();
 	
 	//choosing which column has been clicked for sorting
-	switch($_GET['order']['0']['column']){
+	switch(intval($_GET['order']['0']['column'])){
 		
 		case 0://author
 			$sort_value = 'field_artifact_was_authored_by';
@@ -2420,19 +2439,16 @@ function dss_elc_metrics_get_items(){
 			$sort_value = 'title';
 			break;
 			
-		//not implemented only sorting by title still -- will likely be removed
 		case 2://vols.
-			$sort_value = 'title';
+			$sort_value = 'field_item_volume_migrate';
 			break;
 		
-		//implemented, only because it was quickly do-able. As type is a column in the database for books
 		case 3://type
 			$sort_value = 'type';
 			break;
 			
-		//not implemented only sorting by title still -- will likely be removed
 		case 4://subject
-			$sort_value = 'title';
+			$sort_value = 'field_item_subject';
 			break;
 			
 		case 5://modified
@@ -2444,36 +2460,22 @@ function dss_elc_metrics_get_items(){
 			break;
 		
 	}
-	//If we are getting any column other than author, do this
-	if($sort_value != 'field_artifact_was_authored_by'){
+	//If we are sorting by any column other than author, volumes, or subject, do this
+	if($sort_value != 'field_artifact_was_authored_by' && $sort_value != 'field_item_volume_migrate' && $sort_value != 'field_item_subject'){
 		//query for getting books sorted in the appropriate way
 		$query->addMetaData('account', user_load(1))
 		->entityCondition('entity_type','node')
-		->entityCondition('bundle','book')
+		->entityCondition('bundle','Book')
 		->propertyOrderBy($sort_value,$_GET['order']['0']['dir']);
-		
-		if(trim($_GET['columns']['1']['search']['value'])!=''){
-			$query->fieldCondition('field_artifact_title', 'value', $_GET['columns']['1']['search']['value'],'CONTAINS');
-		
-		}
 		
 		$result = $query->execute();
 		
 		//load the nodes
 		$nodes = entity_load('node', array_keys($result['node']));
 		
-		if(trim($_GET['columns']['0']['search']['value'])!=''){
-			$nodes = array_filter($nodes, function($var){
-				
-					$author_node = entity_load('node', array($var->field_artifact_was_authored_by['und'][0]['target_id']));
-					return stristr($author_node[$var->field_artifact_was_authored_by['und'][0]['target_id']]->title, $_GET['columns']['0']['search']['value']);
-					
-			});
-		}	
-		$nodes = array_slice($nodes, intval($_GET['start']),intval($_GET['length']));
-	  
+		
 	}
-	//If we are getting the author
+	//If we are sorting by the author, volumes, or subject
 	else{
 		
 		//getting a query for all books
@@ -2482,44 +2484,118 @@ function dss_elc_metrics_get_items(){
 		->execute();
 		
 		//loading nodes from book query
-		$test = entity_load('node', array_keys($result['node']));
+		$nodes = entity_load('node', array_keys($result['node']));
 		
-		//sort all of the books by getting author names and compare them
-		usort($test,function($a,$b){
+		switch($sort_value){
 			
-			$author_node_a = entity_load('node', array($a->field_artifact_was_authored_by['und'][0]['target_id']));
-			$author_node_b = entity_load('node', array($b->field_artifact_was_authored_by['und'][0]['target_id']));
-			return strcasecmp(trim($author_node_a[$a->field_artifact_was_authored_by['und'][0]['target_id']]->title), trim($author_node_b[$b->field_artifact_was_authored_by['und'][0]['target_id']]->title));
-			
-		});
-		
-		//emptys the array of all nodes which do not contain the search value
-		if(trim($_GET['columns']['0']['search']['value'])!=''){
-			$test = array_filter($test, function($var){
-				 
-					$author_node = entity_load('node', array($var->field_artifact_was_authored_by['und'][0]['target_id']));
-					return stristr($author_node[$var->field_artifact_was_authored_by['und'][0]['target_id']]->title, $_GET['columns']['0']['search']['value']);
+			//sort all of the books by getting author names and compare them
+			case 'field_artifact_was_authored_by': 
+				usort($nodes,function($a,$b){
+					
+					$author_node_a = entity_load('node', array($a->field_artifact_was_authored_by['und'][0]['target_id']));
+					$author_node_b = entity_load('node', array($b->field_artifact_was_authored_by['und'][0]['target_id']));
+					return strcasecmp(trim($author_node_a[$a->field_artifact_was_authored_by['und'][0]['target_id']]->title), trim($author_node_b[$b->field_artifact_was_authored_by['und'][0]['target_id']]->title));
 					
 			});
+			break;
 			
-		}
-		elseif(trim($_GET['columns']['1']['search']['value'])!=''){
-			$test = array_filter($test,function($var){
-			
-				return stristr($var->title,$_GET['columns']['1']['search']['value']);
-			
+			//sort all of the books by getting their volume number and compare them
+			case 'field_item_volume_migrate': 
+				usort($nodes,function($a,$b){
+					$taxonomy_volume_a = taxonomy_term_load($a->field_item_volume_migrate['und'][0]['tid']);
+					$taxonomy_volume_b = taxonomy_term_load($b->field_item_volume_migrate['und'][0]['tid']);
+					
+					if(intval($taxonomy_volume_a->name) > intval($taxonomy_volume_b->name)){
+						return 1;
+					}
+					elseif(intval($taxonomy_volume_a->name) < intval($taxonomy_volume_b->name)){
+						return -1;
+					}
+					else{
+						return 0;	
+					}
+						
 			});
+			break;
+			
+			//sort all of the books by getting their subjects and compare them
+			case 'field_item_subject': 
+				usort($nodes,function($a,$b){
+					
+					$taxonomy_term_a = taxonomy_term_load($a->field_item_subject['und'][0]['tid']);
+					$taxonomy_term_b = taxonomy_term_load($b->field_item_subject['und'][0]['tid']);
+					return strcasecmp(trim($taxonomy_term_a->name), trim($taxonomy_term_b->name));
+					
+			});
+			break;
 		}
 		
-		$nodes = $test;
-		
-		//get only the cache size worth of objects
+		//If the order is descending, flip the arrays
 		if($_GET['order']['0']['dir']=='desc'){
 			$nodes = array_reverse($nodes);
 		}
-		$nodes = array_slice($nodes, intval($_GET['start']),intval($_GET['length']));
-	
+		
 	}
+
+	//empties the array of all nodes which do not contain the search value
+	
+	//search by author
+	if(trim($_GET['columns']['0']['search']['value'])!=''){
+		$nodes = array_filter($nodes, function($var){
+			 
+				$author_node = entity_load('node', array($var->field_artifact_was_authored_by['und'][0]['target_id']));
+				return stristr($author_node[$var->field_artifact_was_authored_by['und'][0]['target_id']]->title, $_GET['columns']['0']['search']['value']);
+				
+		});
+		
+	}
+	
+	//search by item title
+	if(trim($_GET['columns']['1']['search']['value'])!=''){
+		$nodes = array_filter($nodes,function($var){
+		
+			return stristr($var->title,$_GET['columns']['1']['search']['value']);
+		
+		});
+		
+	}	
+	
+	//search by volume number
+	if(trim($_GET['columns']['2']['search']['value'])!=''){
+		$nodes = array_filter($nodes, function($var){
+			 	$taxonomy_volume = taxonomy_term_load($var->field_item_volume_migrate['und'][0]['tid']);
+				return $taxonomy_volume->name == $_GET['columns']['2']['search']['value'];
+		});
+		
+	}
+	
+	//search by type
+	if(trim($_GET['columns']['3']['search']['value'])!=''){
+		$nodes = array_filter($nodes, function($var){
+			 
+				return stristr($var->type, $_GET['columns']['3']['search']['value']);
+				
+		});
+		
+	}
+	
+	//search by subject
+	if(trim($_GET['columns']['4']['search']['value'])!=''){
+		$nodes = array_filter($nodes, function($var){
+			 
+				$taxonomy_subject = taxonomy_term_load($var->field_item_subject['und'][0]['tid']);
+				return stristr($taxonomy_subject->name, $_GET['columns']['4']['search']['value']);
+				
+		});
+		
+	}
+	
+	//count the number of items that are displayed witht these search values
+	$display_size = count($nodes);
+	
+	//get only the cache size worth of objects
+	$nodes = array_slice($nodes, intval($_GET['start']),intval($_GET['length']));
+	
     //a query for determining the total number of results, used only for iTotalDisplayRecords and iTotalRecords These will be different once searching is implemented
 	$total_query = new EntityFieldQuery();
 	
@@ -2531,7 +2607,7 @@ function dss_elc_metrics_get_items(){
 			->entityCondition('bundle','book')
 			->count()
 			->execute()),
-	    "iTotalDisplayRecords" => $total_query->execute(),
+	    "iTotalDisplayRecords" => $display_size,
 	    "aaData" => array() 	  
 	     );
 		 
@@ -2539,8 +2615,10 @@ function dss_elc_metrics_get_items(){
 	$count = 0;
 	foreach ($nodes as $key => $value) {
 		if(isset($value)){
+			$taxonomy_volumes = taxonomy_term_load($value->field_item_volume_migrate['und'][0]['tid']);
+			$taxonomy_subject = taxonomy_term_load($value->field_item_subject['und'][0]['tid']);
 			$author_node = entity_load('node', array($value->field_artifact_was_authored_by['und'][0]['target_id']));
-			$datatable_json['aaData'][$count] = array($author_node[$value->field_artifact_was_authored_by['und'][0]['target_id']]->title,$value->title,$value->field_item_volume['und'][0]['tid'],'item',$value->field_item_subject['und'][0]['value'],$value->revision_timestamp,$value->nid,$value->nid);
+			$datatable_json['aaData'][$count] = array($author_node[$value->field_artifact_was_authored_by['und'][0]['target_id']]->title,$value->title,$taxonomy_volumes->name,$value->type,$taxonomy_subject->name,$value->revision_timestamp,$value->nid,$value->nid);
 		}
 		else{
 			$datatable_json['aaData'][$count] = array('');
@@ -2551,3 +2629,256 @@ function dss_elc_metrics_get_items(){
 	return drupal_json_output($datatable_json);
 	
 }
+function dss_elc_metrics_get_loans(){
+	
+	//Declaring query object
+	$query = new EntityFieldQuery();
+	
+	//choosing which column has been clicked for sorting
+	switch(intval($_GET['order']['0']['column'])){
+		
+		case 0://shareholder
+			$sort_value = 'field_loan_shareholder';
+			break;
+			
+		case 1://representative
+			$sort_value = 'field_bib_rel_subject';
+			break;
+			
+		case 2://checkout
+			$sort_value = 'field_loan_duration';
+			break;
+		
+		case 3://item title
+			$sort_value = 'field_bib_rel_object';
+			break;
+			
+		case 4://vols
+			$sort_value = 'field_loan_volumes_loaned';
+			break;
+			
+		case 5://modified
+			$sort_value = 'changed';
+			break;
+			
+		default:
+			$sort_value = 'title';
+			break;
+		
+	}
+	//If we are sorting by last changed date
+	if($sort_value == 'changed'){
+		//query for getting books sorted in the appropriate way
+		$query->addMetaData('account', user_load(1))
+		->entityCondition('entity_type','node')
+		->entityCondition('bundle','loan')
+		->propertyOrderBy($sort_value,$_GET['order']['0']['dir']);
+		
+		$result = $query->execute();
+		
+		//load the nodes
+		$nodes = entity_load('node', array_keys($result['node']));
+		
+	}
+	//We are sorting by any other field 
+	else{
+		//getting a query for all loans
+		$result = $query->addMetaData('account', user_load(1))
+		->entityCondition('entity_type','node')
+		->entityCondition('bundle','loan')
+		->execute();
+		
+		//loading nodes from book query
+		$loans = entity_load('node', array_keys($result['node']));
+		
+		//sort all of the books by using $sort_value
+		
+		//case for sorting by shareholder, representative, or item title
+		if($sort_value != 'field_loan_volumes_loaned'||'field_loan_duration'){			
+			switch($sort_value){
+			
+				case 'field_loan_shareholder':	
+					usort($loans,function($a,$b){
+						$sort_node_a = entity_load('node', array($a->field_loan_shareholder['und']['0']['target_id']));
+						$sort_node_b = entity_load('node', array($b->field_loan_shareholder['und']['0']['target_id']));
+						return strcasecmp(trim($sort_node_a[$a->field_loan_shareholder['und']['0']['target_id']]->title), trim($sort_node_b[$b->field_loan_shareholder['und']['0']['target_id']]->title));
+					});
+					break;
+					
+				case 'field_bib_rel_subject' :
+					usort($loans,function($a,$b){
+						$sort_node_a = entity_load('node', array($a->field_bib_rel_subject['und']['0']['target_id']));
+						$sort_node_b = entity_load('node', array($b->field_bib_rel_subject['und']['0']['target_id']));
+						return strcasecmp(trim($sort_node_a[$a->field_bib_rel_subject['und']['0']['target_id']]->title), trim($sort_node_b[$b->field_bib_rel_subject['und']['0']['target_id']]->title));					
+					});
+					break;
+				
+				case 'field_bib_rel_object' :
+					usort($loans,function($a,$b){
+						$sort_node_a = entity_load('node', array($a->field_bib_rel_object['und']['0']['target_id']));
+						$sort_node_b = entity_load('node', array($b->field_bib_rel_object['und']['0']['target_id']));
+						return strcasecmp(trim($sort_node_a[$a->field_bib_rel_object['und']['0']['target_id']]->title), trim($sort_node_b[$b->field_bib_rel_object['und']['0']['target_id']]->title));
+					});
+					break;	
+			}
+				
+		}
+		
+		//case for sorting by checkout date
+		if($sort_value == 'field_loan_duration'){
+			usort($loans,function($a,$b){
+				if($a->field_loan_duration['und']['0']['value'] == $b->field_loan_duration['und']['0']['value']){
+					return 0;
+				}
+				elseif($a->field_loan_duration['und']['0']['value'] > $b->field_loan_duration['und']['0']['value']){
+					return 1;
+				}
+				elseif($a->field_loan_duration['und']['0']['value'] < $b->field_loan_duration['und']['0']['value']){
+					return -1;
+				}
+			});
+		}
+
+		//case for sorting by volume
+		if($sort_value == 'field_loan_volumes_loaned'){
+			usort($loans,function($a,$b){
+				$a_vols = 0;
+				$b_vols = 0;
+				foreach($a->field_loan_volumes_loaned['und'] as $key => $value){
+					$a_vols < $value['value'] ? $a_vols = $value['value'] : $a_vols = $a_vols ;
+				}
+				foreach($b->field_loan_volumes_loaned['und'] as $key => $value){
+					$b_vols < $value['value'] ? $b_vols = $value['value'] : $b_vols = $b_vols ;
+				}
+				
+				if($a_vols == $b_vols){
+					return 0;
+				}
+				elseif($a_vols > $b_vols){
+					return 1;
+				}
+				elseif($a_vols < $b_vols){
+					return -1;
+				}
+			});	
+		}
+		
+		$nodes = $loans;
+		
+		//if it is descending, reverse the order
+		if($_GET['order']['0']['dir']=='desc'){
+			$nodes = array_reverse($nodes);
+		}
+
+	}
+
+	//empties the array of all nodes which do not contain the search value
+	
+	//searching shareholder
+	if(trim($_GET['columns']['0']['search']['value'])!=''){
+		$nodes = array_filter($nodes, function($var){
+				$shareholder_node = entity_load('node', array($var->field_loan_shareholder['und'][0]['target_id']));
+				return stristr($shareholder_node[$var->field_loan_shareholder['und'][0]['target_id']]->title, $_GET['columns']['0']['search']['value']);
+				
+		});	
+	}
+	//searching representative
+	if(trim($_GET['columns']['1']['search']['value'])!=''){
+		$nodes = array_filter($nodes,function($var){
+				
+			$representative_node = entity_load('node', array($var->field_bib_rel_subject['und'][0]['target_id']));
+			return stristr($representative_node[$var->field_bib_rel_subject['und'][0]['target_id']]->title,$_GET['columns']['1']['search']['value']);
+		
+		});
+	}
+	//searching title
+	if(trim($_GET['columns']['3']['search']['value'])!=''){
+		$nodes = array_filter($nodes,function($var){
+		
+			$item_node = entity_load('node', array($var->field_bib_rel_object['und'][0]['target_id']));
+			return stristr($item_node[$var->field_bib_rel_object['und'][0]['target_id']]->title,$_GET['columns']['3']['search']['value']);
+		
+		});
+	}
+	//searching  Vols.
+	if(trim($_GET['columns']['4']['search']['value'])!=''){
+		
+		$nodes = array_filter($nodes,function($var){
+			$found = false;
+			foreach($var->field_loan_volumes_loaned['und'] as $key => $value){
+					stristr($value['value'],$_GET['columns']['4']['search']['value']) ? $found = true : $found=$found ;
+				}
+			return $found;
+		
+		});
+	}	
+	
+	//count the number of items that are displayed witht these search values
+	$display_size = count($nodes);
+						
+	//get only the cache size worth of objects
+	$nodes = array_slice($nodes, intval($_GET['start']),intval($_GET['length']));
+	
+
+    //a query for determining the total number of results, used only for iTotalDisplayRecords and iTotalRecords These will be different once searching is implemented
+	$total_query = new EntityFieldQuery();
+	
+	//correctly formatting the JSON return object metadata
+	$datatable_json =  array(
+	    "draw" => intval($_GET['draw'])+1,
+	    "iTotalRecords" => intval($total_query
+	    	->entityCondition('entity_type','node')
+			->entityCondition('bundle','loan')
+			->count()
+			->execute()),
+	    "iTotalDisplayRecords" => $display_size,
+	    "aaData" => array() 	  
+	     );
+	//correctly formatting the JSON return object aaData
+	$count = 0;
+	foreach ($nodes as $key => $value) {
+		if(isset($value)){
+			$shareholder_node = entity_load('node', array($value->field_loan_shareholder['und'][0]['target_id']));
+			$representative_node = entity_load('node', array($value->field_bib_rel_subject['und'][0]['target_id']));
+			$item_node = entity_load('node', array($value->field_bib_rel_object['und'][0]['target_id']));
+
+			$datatable_json['aaData'][$count] = array(
+			
+			$shareholder_node[$value->field_loan_shareholder['und'][0]['target_id']]->title,
+			$representative_node[$value->field_loan_shareholder['und'][0]['target_id']]->title,
+			$value->field_loan_duration['und']['0']['value'],
+			$item_node[$value->field_bib_rel_object['und'][0]['target_id']]->title
+			);
+			
+			$these_vols = '';
+			
+			foreach($value->field_loan_volumes_loaned['und'] as $vol_key => $vol_value){
+				
+				if($these_vols == ''){
+					
+					$these_vols = $vol_value['value'];
+					
+				}
+				else{
+					
+					$these_vols = $these_vols . ',' . $vol_value['value'];
+					
+				}
+			}
+			array_push($datatable_json['aaData'][$count],
+			$these_vols,
+			$value->revision_timestamp,
+			$value->nid,
+			$value->nid);
+		
+		}
+		else{
+			$datatable_json['aaData'][$count] = array('');
+		}
+		$count++;
+	}
+
+	return drupal_json_output($datatable_json);
+	
+}
+
