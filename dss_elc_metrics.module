@@ -2356,7 +2356,6 @@ function dss_elc_metrics_get_people(){
 			break;
 		
 	}
-		
 	//query for getting human nodes in the sorted in the specified order
 	$query->addMetaData('account', user_load(1))
 	->entityCondition('entity_type','node')
@@ -2368,17 +2367,17 @@ function dss_elc_metrics_get_people(){
 		
 	}
 	//implement this with radio button when it is created
-	if(true){
+	if($_GET['authors']!='true'){
 		$query->fieldCondition('field_person_type','tid','230','!=');
 	}
 	
-	//count the number of items that are displayed witht these search values
-	$display_size = count($query->execute());
+	//count the number of items that are displayed with these search values
+	$result = $query->execute();
+	$display_size = count($result['node']);
 	
 	//get only the cache size worth of people
 	$result = $query->range(intval($_GET['start']),intval($_GET['start'])+intval($_GET['length']))
-			  ->execute();
-			  
+			  ->execute();		  
 	//loading nodes from query
     $nodes = entity_load('node', array_keys($result['node']));
 	
@@ -2386,7 +2385,7 @@ function dss_elc_metrics_get_people(){
 	$total_query = new EntityFieldQuery();
 	
 	//implement this with radio button when it is created
-	if(true){
+	if($_GET['authors']!='true'){
 		$total_query->fieldCondition('field_person_type','tid','230','!=');
 	}
 	
