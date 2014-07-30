@@ -2432,6 +2432,57 @@ function dss_elc_metrics_get_people(){
 	
 }
 
+/**
+ * @author griffinj@lafayette.edu
+ *
+ * Function for transforming DataTables arrays for Manifestation Content Nodes
+ *
+ * @param [Array] $results Structured array record to be parsed by DataTables
+ * @return [Array] An array of Manifestation Objects
+ */
+
+function _dss_elc_metrics_items_record_transform($manifestation, $author, $volume_term, $subject_term) {
+
+  $record = array($author->title, $manifestation->title,$volume_term->name,$manifestation->type,$subject_term->name,$manifestation->revision_timestamp,$manifestation->nid,$manifestation->nid);
+
+  $items = dss_elc_items_by_manifestation($manifestation);
+
+  // If there were items in relation to this manifestation...
+  if(count($items) > 0) {
+
+    $term_map = function($term_ref) {
+
+      $term = taxonomy_term_load($term_ref['tid']);
+      return $term->name;
+    };
+
+    // Retrieve the volumes for the related items
+    $volume_refs = array();
+
+    // @todo Refactor into a map
+    foreach($items as $i => $item) {
+
+      $volume_refs[] = $item->field_item_volume_migrate[$item->language][0];
+    }
+
+    $volumes = array_map($term_map, $volume_refs);
+    // Sort by the value for the array (i. e. the volume number itself)
+    sort($volumes);
+    
+    $first_item = reset($items);
+    
+    // Retrieve the subject terms for the first item
+    $subjects = array_map($term_map, $first_item->field_item_subject[$item->language]);
+
+    // Capitalize the Content Node Type
+    $type = ucfirst($first_item->type);
+
+    $record = array($author->title, $manifestation->title, $volumes, $type, $subjects, $first_item->revision_timestamp, $first_item->nid, $first_item->nid);
+  }
+
+  return $record;
+}
+
 /*
  * Function for server-side pre-processing of the the browse items functionality of the website.
  * this returns a json object wnich will be sent to the webpage for DataTables implementation.
@@ -2478,7 +2529,7 @@ function dss_elc_metrics_get_items(){
 		//query for getting books sorted in the appropriate way
 		$query->addMetaData('account', user_load(1))
 		->entityCondition('entity_type','node')
-		->entityCondition('bundle','Book')
+		->entityCondition('bundle','manifestation')
 		->propertyOrderBy($sort_value,$_GET['order']['0']['dir']);
 		
 		$result = $query->execute();
@@ -2493,7 +2544,7 @@ function dss_elc_metrics_get_items(){
 		
 		//getting a query for all books
 		$result = $query->entityCondition('entity_type','node')
-		->entityCondition('bundle','book')
+		->entityCondition('bundle','manifestation')
 		->execute();
 		
 		//loading nodes from book query
@@ -2617,21 +2668,38 @@ function dss_elc_metrics_get_items(){
 	    "draw" => intval($_GET['draw'])+1,
 	    "iTotalRecords" => intval($total_query
 	    	->entityCondition('entity_type','node')
-			->entityCondition('bundle','book')
+			->entityCondition('bundle','manifestation')
 			->count()
 			->execute()),
 	    "iTotalDisplayRecords" => $display_size,
 	    "aaData" => array() 	  
 	     );
-		 
+
+	/**
+	 * @author griffinj@lafayette.edu
+	 * Transform the data set to be parsed by DataTables
+	 *
+	 */
+
 	//correctly formatting the JSON return object aaData
 	$count = 0;
 	foreach ($nodes as $key => $value) {
-		if(isset($value)){
+	                if(isset($value)){
 			$taxonomy_volumes = taxonomy_term_load($value->field_item_volume_migrate['und'][0]['tid']);
 			$taxonomy_subject = taxonomy_term_load($value->field_item_subject['und'][0]['tid']);
 			$author_node = entity_load('node', array($value->field_artifact_was_authored_by['und'][0]['target_id']));
-			$datatable_json['aaData'][$count] = array($author_node[$value->field_artifact_was_authored_by['und'][0]['target_id']]->title,$value->title,$taxonomy_volumes->name,$value->type,$taxonomy_subject->name,$value->revision_timestamp,$value->nid,$value->nid);
+
+			/**
+			 * @author griffinj@lafayette.edu
+			 * Transform the record
+			 */
+
+			//$datatable_record = array($author_node[$value->field_artifact_was_authored_by['und'][0]['target_id']]->title,$value->title,$taxonomy_volumes->name,$value->type,$taxonomy_subject->name,$value->revision_timestamp,$value->nid,$value->nid);
+
+			$author = $author_node[$value->field_artifact_was_authored_by['und'][0]['target_id']];
+			$datatable_record = _dss_elc_metrics_items_record_transform($value, $author, $taxonomy_volumes, $taxonomy_subject);
+
+			$datatable_json['aaData'][$count] = $datatable_record;
 		}
 		else{
 			$datatable_json['aaData'][$count] = array('');
@@ -2847,6 +2915,7 @@ function dss_elc_metrics_get_loans(){
 	    "iTotalDisplayRecords" => $display_size,
 	    "aaData" => array() 	  
 	     );
+
 	//correctly formatting the JSON return object aaData
 	$count = 0;
 	foreach ($nodes as $key => $value) {
