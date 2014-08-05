@@ -2485,6 +2485,53 @@ function _dss_elc_metrics_items_record_transform($manifestation, $author, $volum
 
 /**
  * @author griffinj@lafayette.edu
+ * For sorting the records rendered within the View
+ *
+ */
+
+function _dss_elc_metrics_items_records_sort($records, $field = 'title', $order = 'asc') {
+
+  if($field == 'field_item_subject') {
+    
+    $sort = function($record_u, $record_v) {
+
+      // Search on the first value
+      $subject_u = $record_u[4][0];
+      $subject_v = $record_v[4][0];
+
+      return strcmp($subject_u, $subject_v);
+    };
+
+    usort($sort, $records);
+
+    if($order == 'desc') {
+
+      $records = array_reverse($records);
+    }
+  } elseif($field == 'field_item_volume_migrate') {
+
+    $sort = function($record_u, $record_v) {
+
+      // Search on the first value
+      $subject_u = $record_u[2][0];
+      $subject_v = $record_v[2][0];
+
+      return strcmp($subject_u, $subject_v);
+    };
+
+    usort($sort, $records);
+
+    if($order == 'desc') {
+
+      $records = array_reverse($records);
+    }
+  }
+
+  return $records;
+}
+
+/**
+ * @author griffinj@lafayette.edu
  * For integration with the MongoDB for caching
  * @todo Migrate into the module dss_elc_mongodb
  */
@@ -2526,7 +2573,7 @@ function dss_elc_metrics_get_items(){
 			break;
 			
 		case 4://subject
-			$sort_value = 'field_item_subject';
+		        $sort_value = 'field_item_subject';
 			break;
 			
 		case 5://modified
@@ -2707,7 +2754,7 @@ function dss_elc_metrics_get_items(){
 	//get only the cache size worth of objects
 	$nodes = array_slice($nodes, intval($_GET['start']),intval($_GET['length']));
 	
-    //a query for determining the total number of results, used only for iTotalDisplayRecords and iTotalRecords These will be different once searching is implemented
+	//a query for determining the total number of results, used only for iTotalDisplayRecords and iTotalRecords These will be different once searching is implemented
 	$total_query = new EntityFieldQuery();
 	
 	//correctly formatting the JSON return object metadata
@@ -2755,6 +2802,13 @@ function dss_elc_metrics_get_items(){
 		}
 		$count++;
 	}
+
+	/**
+	 * @author griffinj@lafayette.edu
+	 * For extending the sorting functionality for transformed records (e. g. sorting against related Item/Book/Volume values)
+	 *
+	 */
+	$datatable_json['aaData'] = _dss_elc_metrics_items_records_sort($datatable_json['aaData'], $sort_value, $sort_dir);
 
 	/**
 	 * @author griffinj@lafayette.edu
@@ -2806,6 +2860,42 @@ function dss_elc_metrics_get_loans(){
 			break;
 		
 	}
+
+	/**
+	 * griffinj@lafayette.edu
+	 * Integrate MongoDB caching for unfiltered data sets
+	 * @todo Refactor for hook implementations
+	 */
+	$sort_dir = $_GET['order']['0']['dir'];
+
+	$mongo_collection = _dss_elc_mongodb_get_collection('views_datatables_cache');
+
+	// @todo Refactor into a map/reduce operation?
+	$filtered_by_search = FALSE;
+	foreach($_GET['columns'] as $columnar_data) {
+
+	  $filtered_by_search = trim($columnar_data['search']['value']) != '' or $filtered_by_search;
+	}
+
+	if(!$filtered_by_search) {
+
+	  // Generate the Document pseudo-key for the MongoDB based upon the sorting parameters
+	  $mongo_key = 'views_datatables_cache_loans_' . $sort_value . '_' . $sort_dir;
+
+	  // Retrieve the cached data set from the MongoDB
+	  $cached_datatable_json = $mongo_collection->findOne(array('view' => $mongo_key));
+	  if($cached_datatable_json) {
+
+	    $data = $cached_datatable_json['data'];
+	    $data['draw'] = intval($_GET['draw']) + 1;
+
+	    return drupal_json_output($data);
+	  }
+	}
+
+
+
+
 	//If we are sorting by last changed date
 	if($sort_value == 'changed'){
 		//query for getting books sorted in the appropriate way
@@ -2975,6 +3065,44 @@ function dss_elc_metrics_get_loans(){
 	    "aaData" => array() 	  
 	     );
 
+	/**
+	 * @author griffinj@lafayette.edu
+	 * Transform the data set to be parsed by DataTables
+	 *
+	 */
+
+	/*
+
+	//correctly formatting the JSON return object aaData
+	$count = 0;
+	foreach ($nodes as $key => $value) {
+	                if(isset($value)){
+			$taxonomy_volumes = taxonomy_term_load($value->field_item_volume_migrate['und'][0]['tid']);
+			$taxonomy_subject = taxonomy_term_load($value->field_item_subject['und'][0]['tid']);
+			$author_node = entity_load('node', array($value->field_artifact_was_authored_by['und'][0]['target_id']));
+
+			/**
+			 * @author griffinj@lafayette.edu
+			 * Transform the record
+			 * /
+
+			//$datatable_record = array($author_node[$value->field_artifact_was_authored_by['und'][0]['target_id']]->title,$value->title,$taxonomy_volumes->name,$value->type,$taxonomy_subject->name,$value->revision_timestamp,$value->nid,$value->nid);
+
+			$author = $author_node[$value->field_artifact_was_authored_by['und'][0]['target_id']];
+
+			// @todo Integrate sorting
+			$datatable_record = _dss_elc_metrics_items_record_transform($value, $author, $taxonomy_volumes, $taxonomy_subject);
+
+			$datatable_json['aaData'][$count] = $datatable_record;
+		}
+		else{
+			$datatable_json['aaData'][$count] = array('');
+		}
+		$count++;
+	}
+
+	 */
+
 	//correctly formatting the JSON return object aaData
 	$count = 0;
 	foreach ($nodes as $key => $value) {
@@ -2983,6 +3111,7 @@ function dss_elc_metrics_get_loans(){
 			$representative_node = entity_load('node', array($value->field_bib_rel_subject['und'][0]['target_id']));
 			$item_node = entity_load('node', array($value->field_bib_rel_object['und'][0]['target_id']));
 
+			/*
 			$datatable_json['aaData'][$count] = array(
 			
 			$shareholder_node[$value->field_loan_shareholder['und'][0]['target_id']]->title,
@@ -2990,7 +3119,20 @@ function dss_elc_metrics_get_loans(){
 			$value->field_loan_duration['und']['0']['value'],
 			$item_node[$value->field_bib_rel_object['und'][0]['target_id']]->title
 			);
-			
+			*/
+
+			/**
+			 * @author griffinj@lafayette.edu
+			 * Normalize the record (?)
+			 */
+
+			$shareholder_name = $shareholder_node[$value->field_loan_shareholder['und'][0]['target_id']]->title;
+			$representative_name = $representative_node[$value->field_loan_shareholder['und'][0]['target_id']]->title;
+			$loan_duration = $value->field_loan_duration['und']['0']['value'];
+			$item_title = $item_node[$value->field_bib_rel_object['und'][0]['target_id']]->title;
+
+			$datatable_json['aaData'][$count] = array($shareholder_name, $representative_name, $loan_duration, $item_title);
+
 			$these_vols = '';
 			
 			foreach($value->field_loan_volumes_loaned['und'] as $vol_key => $vol_value){
@@ -3018,6 +3160,25 @@ function dss_elc_metrics_get_loans(){
 		}
 		$count++;
 	}
+
+	/**
+	 * @author griffinj@lafayette.edu
+	 * For extending the sorting functionality for transformed records (e. g. sorting against related Item/Book/Volume values)
+	 *
+	 */
+	$datatable_json['aaData'] = _dss_elc_metrics_items_records_sort($datatable_json['aaData'], $sort_value, $sort_dir);
+
+	/**
+	 * @author griffinj@lafayette.edu
+	 * Consistently update the MongoDB cache for cases in which the results were not filtered
+	 * @todo Invoke a hook implementation
+	 *
+	 */
+	if(!$filtered_by_search) {
+
+	  $mongo_collection->insert(array('view' => $mongo_key, 'data' => $datatable_json));
+	}
+
 
 	return drupal_json_output($datatable_json);
 	
