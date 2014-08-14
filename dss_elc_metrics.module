@@ -2420,7 +2420,7 @@ function dss_elc_metrics_get_people(){
 
 /*
  * Function for server-side pre-processing of the the browse items functionality of the website.
- * this returns a json object wnich will be sent to the webpage for DataTables implementation.
+ * this returns a json object which will be sent to the webpage for DataTables implementation.
  */
 function dss_elc_metrics_get_items(){
 	
@@ -2468,7 +2468,7 @@ function dss_elc_metrics_get_items(){
 		->propertyOrderBy($sort_value,$_GET['order']['0']['dir']);
 		
 		$result = $query->execute();
-		
+		dpm($result);
 		//load the nodes
 		$nodes = entity_load('node', array_keys($result['node']));
 		
@@ -2871,7 +2871,7 @@ function dss_elc_metrics_get_loans(){
 			$value->nid);
 		
 		}
-		else{
+		else{https://elc.dev.lafayette.edu/items
 			$datatable_json['aaData'][$count] = array('');
 		}
 		$count++;
