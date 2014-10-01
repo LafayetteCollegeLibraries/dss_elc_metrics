@@ -2534,8 +2534,11 @@ function _dss_elc_metrics_items_records_sort($records, $field = 'title', $order 
  * @author griffinj@lafayette.edu
  * For integration with the MongoDB for caching
  * @todo Migrate into the module dss_elc_mongodb
+ *
  */
-function _dss_elc_mongodb_get_collection($collection_name = 'views_datatables_cache', $db = 'dss_elc_mongodb', $host = 'santorini0.stage.lafayette.edu', $options = array()) {
+function _dss_elc_mongodb_get_collection($collection_name = 'views_datatables_cache', $db = 'dss_elc_mongodb', $options = array()) {
+
+  $host = variable_get('dss_elc_metrics_mongodb_host', 'santorini0.stage.lafayette.edu');
 
   $mongo = new Mongo($host, $options);
   $mongo_db = $mongo->selectDB($db);
@@ -2823,6 +2826,11 @@ function dss_elc_metrics_get_items(){
 
 	return drupal_json_output($datatable_json);
 }
+
+/**
+ *
+ *
+ */
 function dss_elc_metrics_get_loans(){
 	
 	//Declaring query object
@@ -3050,7 +3058,7 @@ function dss_elc_metrics_get_loans(){
 	$nodes = array_slice($nodes, intval($_GET['start']),intval($_GET['length']));
 	
 
-    //a query for determining the total number of results, used only for iTotalDisplayRecords and iTotalRecords These will be different once searching is implemented
+	//a query for determining the total number of results, used only for iTotalDisplayRecords and iTotalRecords These will be different once searching is implemented
 	$total_query = new EntityFieldQuery();
 	
 	//correctly formatting the JSON return object metadata
@@ -3071,38 +3079,6 @@ function dss_elc_metrics_get_loans(){
 	 *
 	 */
 
-	/*
-
-	//correctly formatting the JSON return object aaData
-	$count = 0;
-	foreach ($nodes as $key => $value) {
-	                if(isset($value)){
-			$taxonomy_volumes = taxonomy_term_load($value->field_item_volume_migrate['und'][0]['tid']);
-			$taxonomy_subject = taxonomy_term_load($value->field_item_subject['und'][0]['tid']);
-			$author_node = entity_load('node', array($value->field_artifact_was_authored_by['und'][0]['target_id']));
-
-			/**
-			 * @author griffinj@lafayette.edu
-			 * Transform the record
-			 * /
-
-			//$datatable_record = array($author_node[$value->field_artifact_was_authored_by['und'][0]['target_id']]->title,$value->title,$taxonomy_volumes->name,$value->type,$taxonomy_subject->name,$value->revision_timestamp,$value->nid,$value->nid);
-
-			$author = $author_node[$value->field_artifact_was_authored_by['und'][0]['target_id']];
-
-			// @todo Integrate sorting
-			$datatable_record = _dss_elc_metrics_items_record_transform($value, $author, $taxonomy_volumes, $taxonomy_subject);
-
-			$datatable_json['aaData'][$count] = $datatable_record;
-		}
-		else{
-			$datatable_json['aaData'][$count] = array('');
-		}
-		$count++;
-	}
-
-	 */
-
 	//correctly formatting the JSON return object aaData
 	$count = 0;
 	foreach ($nodes as $key => $value) {
@@ -3110,16 +3086,6 @@ function dss_elc_metrics_get_loans(){
 			$shareholder_node = entity_load('node', array($value->field_loan_shareholder['und'][0]['target_id']));
 			$representative_node = entity_load('node', array($value->field_bib_rel_subject['und'][0]['target_id']));
 			$item_node = entity_load('node', array($value->field_bib_rel_object['und'][0]['target_id']));
-
-			/*
-			$datatable_json['aaData'][$count] = array(
-			
-			$shareholder_node[$value->field_loan_shareholder['und'][0]['target_id']]->title,
-			$representative_node[$value->field_loan_shareholder['und'][0]['target_id']]->title,
-			$value->field_loan_duration['und']['0']['value'],
-			$item_node[$value->field_bib_rel_object['und'][0]['target_id']]->title
-			);
-			*/
 
 			/**
 			 * @author griffinj@lafayette.edu
