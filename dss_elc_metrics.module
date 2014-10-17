@@ -2538,7 +2538,7 @@ function _dss_elc_metrics_items_records_sort($records, $field = 'title', $order 
  */
 function _dss_elc_mongodb_get_collection($collection_name = 'views_datatables_cache', $db = 'dss_elc_mongodb', $options = array()) {
 
-  $host = variable_get('dss_elc_metrics_mongodb_host', 'santorini0.stage.lafayette.edu');
+  $host = variable_get('dss_elc_metrics_mongodb_host', 'santorini0.lafayette.edu');
 
   $mongo = new Mongo($host, $options);
   $mongo_db = $mongo->selectDB($db);
