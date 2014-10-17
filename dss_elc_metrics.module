@@ -2606,7 +2606,8 @@ function dss_elc_metrics_get_items(){
 	$filtered_by_search = FALSE;
 	foreach($_GET['columns'] as $columnar_data) {
 
-	  $filtered_by_search = trim($columnar_data['search']['value']) != '' or $filtered_by_search;
+	  //$filtered_by_search = trim($columnar_data['search']['value']) != '' or $filtered_by_search;
+	  $filtered_by_search = !empty($columnar_data['search']['value']) + $filtered_by_search;
 	}
 
 	if(!$filtered_by_search) {
@@ -2889,7 +2890,8 @@ function dss_elc_metrics_get_loans(){
 	$filtered_by_search = FALSE;
 	foreach($_GET['columns'] as $columnar_data) {
 
-	  $filtered_by_search = trim($columnar_data['search']['value']) != '' or $filtered_by_search;
+	  //$filtered_by_search = trim($columnar_data['search']['value']) != '' or $filtered_by_search;
+	  $filtered_by_search = !empty($columnar_data['search']['value']) + $filtered_by_search;
 	}
 
 	if(!$filtered_by_search) {
@@ -2907,9 +2909,6 @@ function dss_elc_metrics_get_loans(){
 	    return drupal_json_output($data);
 	  }
 	}
-
-
-
 
 	//If we are sorting by last changed date
 	if($sort_value == 'changed'){
@@ -3027,8 +3026,10 @@ function dss_elc_metrics_get_loans(){
 				
 		});	
 	}
+
 	//searching representative
 	if(trim($_GET['columns']['1']['search']['value'])!=''){
+
 		$nodes = array_filter($nodes,function($var){
 				
 			$representative_node = entity_load('node', array($var->field_bib_rel_subject['und'][0]['target_id']));
