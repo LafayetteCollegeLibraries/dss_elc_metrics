@@ -3133,7 +3133,7 @@ function dss_elc_metrics_datatables_query($bundles, $request) {
 					  'sm_field_item_subject',
 					  'sm_changed'),
 			  'human' => array('label',
-					   'sm_changed')
+					   'is_changed')
 			  );
 
   $first_bundle = $bundles[0];
@@ -3169,7 +3169,15 @@ function dss_elc_metrics_datatables_query($bundles, $request) {
   }
   $query_string .= implode(' AND ', $query);
 
-  $sort = 'sort_' . $solr_field_map[$first_bundle][intval($request['order']['0']['column'])] . ' ' . $request['order']['0']['dir'];
+  $solr_field = $solr_field_map[$first_bundle][intval($request['order']['0']['column'])];
+  if($solr_field == 'label' or
+     preg_match('/^ss_/', $solr_field)) {
+
+    $sort = 'sort_' . $solr_field . ' ' . $request['order']['0']['dir'];
+  } else {
+
+    $sort = $solr_field . ' ' . $request['order']['0']['dir'];
+  }
 
   $params = array('q' => $query_string,
 		  //'rows' => 100000,
