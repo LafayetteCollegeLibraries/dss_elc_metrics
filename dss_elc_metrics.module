@@ -2706,9 +2706,6 @@ function dss_elc_metrics_get_items($request = NULL) {
 	list($final_query, $solr_response) = dss_elc_metrics_datatables_query(array('item', 'book', 'periodical'), $request);
 	$datatable_json = dss_elc_metrics_datatables_response($solr_response, array('item', 'book', 'periodical'));
 
-	print_r($datatable_json);
-	exit(1);
-
 	/**
 	 * @author griffinj@lafayette.edu
 	 * Consistently update the MongoDB cache for cases in which the results were not filtered
@@ -2998,6 +2995,25 @@ function dss_elc_metrics_apachesolr_index_document_build($document, $entity, $en
 	      $entity->type == 'book' or
 	      $entity->type == 'periodical') {
 
+      /*
+  $solr_field_map = array('loan' => array('sm_field_loan_shareholder_label',
+					  'sm_field_bib_rel_subject_label',
+					  'sm_field_loan_duration_value',
+					  'sm_field_bib_rel_object_label',
+					  'sm_field_loan_volumes_loaned',
+					  'is_changed'),
+			  'item' => array('sm_field_artifact_was_authored_by_label',
+					  'label',
+					  'im_field_item_volume_migrate',
+					  'sm_field_artifact_type_constant',
+					  'sm_field_item_subject',
+					  'is_changed'),
+			  'human' => array('label',
+					   'is_changed')
+			  );
+
+       */
+
       foreach(array('field_artifact_was_authored_by') as $entity_reference_field) {
 
 	if(property_exists($entity, $entity_reference_field) and !empty($entity->{$entity_reference_field}[$entity->language])) {
@@ -3010,11 +3026,15 @@ function dss_elc_metrics_apachesolr_index_document_build($document, $entity, $en
 
       //$document->addField("ss_label", $entity->title);
 
+      /*
       if(property_exists($entity, 'field_item_volume_migrate') and !empty($entity->field_item_volume_migrate[$entity->language])) {
-	  
-	$document->addField("ss_field_item_volume_migrate", $entity->field_item_volume_migrate[$entity->language][0]['value']);
-      }
 
+	watchdog('dss_elc_metrics', 'type item_volume_migrate: %type', array('%type' => $entity->field_item_volume_migrate[$entity->language][0], WATCHDOG_NOTICE));
+	$document->addField("ss_field_item_volume_migrate", $entity->field_item_volume_migrate[$entity->language][0]);
+      }
+      */
+
+      /*
       foreach(array('field_artifact_type') as $entity_field) {
 
 	$type_map = array(0 => 'book',
@@ -3022,17 +3042,30 @@ function dss_elc_metrics_apachesolr_index_document_build($document, $entity, $en
 	
 	if(property_exists($entity, $entity_field) and !empty($entity->{$entity_field}[$entity->language])) {
 	  
-	  //watchdog('dss_elc_metrics', 'type constant: %type', array('%type' => $type_map[$entity->{$entity_field}[$entity->language][0]['value']], WATCHDOG_NOTICE));
+	  watchdog('dss_elc_metrics', 'type constant: %type', array('%type' => $type_map[$entity->{$entity_field}[$entity->language][0]['value']], WATCHDOG_NOTICE));
 	  $document->addField("ss_" . $entity_field . "_constant", $type_map[$entity->{$entity_field}[$entity->language][0]['value']]);
 	}
       }
+      */
 
-      foreach(array('field_item_subject') as $taxon_field) {
+      foreach(array('field_item_volume_migrate',
+		    ) as $taxon_field) {
 
 	if(property_exists($entity, $taxon_field) and !empty($entity->{$taxon_field}[$entity->language])) {
 
-	$subject = taxonomy_term_load($entity->{$taxon_field}[$entity->language][0]['tid']);
-	$document->addField("ss_" . $taxon_field, $subject->name);
+	  $subject = taxonomy_term_load($entity->{$taxon_field}[$entity->language][0]['tid']);
+	  $document->addField("is_" . $taxon_field, $subject->name);
+	}
+      }
+
+      foreach(array('field_item_subject',
+		    //'field_artifact_type'
+		    ) as $taxon_field) {
+
+	if(property_exists($entity, $taxon_field) and !empty($entity->{$taxon_field}[$entity->language])) {
+
+	  $subject = taxonomy_term_load($entity->{$taxon_field}[$entity->language][0]['tid']);
+	  $document->addField("ss_" . $taxon_field, $subject->name);
 	}
       }
 
@@ -3080,17 +3113,24 @@ function dss_elc_metrics_datatables_response($response, $bundles) {
 		 $doc->entity_id);
     } elseif(in_array('item', $bundles)) {
 
-      $item_type_constant = (property_exists($doc, $sm_field_artifact_type_constant) and !empty($doc->sm_field_artifact_type_constant)) ? $doc->sm_field_artifact_type_constant[0] : $doc->bundle_name;
+      $item_type_constant = (property_exists($doc, $ss_field_artifact_type_constant) and !empty($doc->ss_field_artifact_type_constant)) ? $doc->ss_field_artifact_type_constant : $doc->bundle_name;
 
-      $datatable_json['aaData'][$count] = array(!is_null($doc->sm_field_artifact_was_authored_by_label[0]) ? $doc->sm_field_artifact_was_authored_by_label[0] : '[Illegible]',
+      $datatable_json['aaData'][$count] = array(!is_null($doc->ss_field_artifact_was_authored_by_label) ? $doc->ss_field_artifact_was_authored_by_label : '[Illegible]',
 						$doc->label,
 						$doc->im_field_item_volume_migrate[0],
 						$item_type_constant,
-						implode(',', $doc->sm_field_item_subject),
+						//implode(',', $doc->ss_field_item_subject),
+						$doc->ss_field_item_subject,
 						$doc->ds_last_comment_or_change,
 						$doc->entity_id,
 						$doc->entity_id
 						);
+
+      /*
+      print_r($doc->ss_field_item_subject);
+      print_r($datatable_json['aaData'][$count]);
+      exit(1);
+      */
 
     } elseif(in_array('human', $bundles)) {
 
@@ -3125,13 +3165,13 @@ function dss_elc_metrics_datatables_query($bundles, $request) {
 					  'sm_field_loan_duration_value',
 					  'sm_field_bib_rel_object_label',
 					  'sm_field_loan_volumes_loaned',
-					  'sm_changed'),
-			  'item' => array('sm_field_artifact_was_authored_by_label',
+					  'is_changed'),
+			  'item' => array('ss_field_artifact_was_authored_by_label',
 					  'label',
-					  'im_field_item_volume_migrate',
-					  'sm_field_artifact_type_constant',
-					  'sm_field_item_subject',
-					  'sm_changed'),
+					  'is_field_item_volume_migrate',
+					  'ss_field_artifact_type_constant',
+					  'ss_field_item_subject',
+					  'is_changed'),
 			  'human' => array('label',
 					   'is_changed')
 			  );
@@ -3169,13 +3209,26 @@ function dss_elc_metrics_datatables_query($bundles, $request) {
   }
   $query_string .= implode(' AND ', $query);
 
+  // Retrieve the name of the Solr field
   $solr_field = $solr_field_map[$first_bundle][intval($request['order']['0']['column'])];
-  if($solr_field == 'label' or
-     preg_match('/^ss_/', $solr_field)) {
+
+  // If this is a "label" field or a single string field type...
+  if($solr_field == 'ss_field_artifact_type_constant') {
+
+    $sort = 'bundle' . ' ' . $request['order']['0']['dir'];
+
+  } elseif($solr_field == 'label') {
 
     $sort = 'sort_' . $solr_field . ' ' . $request['order']['0']['dir'];
+
+  } elseif(preg_match('/^ss_(.+)/', $solr_field, $m)) {
+
+    // ...then apachesolr's default copyField should be used
+    $sort = 'sort_' . $m[1] . ' ' . $request['order']['0']['dir'];
+
   } else {
 
+    // Otherwise, simply attempt to sort on the field name
     $sort = $solr_field . ' ' . $request['order']['0']['dir'];
   }
 
@@ -3186,6 +3239,9 @@ function dss_elc_metrics_datatables_query($bundles, $request) {
 		  //'start' => $request['start'],
 		  'sort' => $sort
 		  );
+
+  //print_r($params);
+  //exit(1);
 
   // This is the object that knows about the query coming from the user.
   $query = apachesolr_drupal_query('views_datatables_' . $first_bundle, $params, $sort, '', $solr);
