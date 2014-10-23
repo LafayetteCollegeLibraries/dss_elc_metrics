@@ -2349,8 +2349,11 @@ function dss_elc_metrics_get_network_ajax() {
 /*
  * Function for server-side pre-processing of the the browse people functionality of the website.
  * this returns a JSON object which will be sent to the webpage for DataTables implementation.
+ *
  */
-function dss_elc_metrics_get_people(){
+function dss_elc_metrics_get_people($request) {
+
+  $request = !is_null($request) ? $request : $_GET;
 
 	$query = new EntityFieldQuery();
 	
@@ -2368,8 +2371,75 @@ function dss_elc_metrics_get_people(){
 		default:
 			$sort_value = 'title';
 			break;
-		
 	}
+
+	/**
+	 * griffinj@lafayette.edu
+	 * Integrate MongoDB caching for unfiltered data sets
+	 * @todo Refactor for hook implementations
+	 */
+	$sort_dir = $_GET['order']['0']['dir'];
+	// Extend for sorting involving start values
+	// Resolves EDDC-367
+	$sort_begin = $_GET['start'];
+
+	$mongo_collection = _dss_elc_mongodb_get_collection('views_datatables_cache');
+
+	// @todo Refactor into a map/reduce operation?
+	$filtered_by_search = FALSE;
+	foreach($_GET['columns'] as $columnar_data) {
+
+	  //$filtered_by_search = trim($columnar_data['search']['value']) != '' or $filtered_by_search;
+	  $filtered_by_search = !empty($columnar_data['search']['value']) + $filtered_by_search;
+	}
+
+	if(!$filtered_by_search) {
+
+	  // Generate the Document pseudo-key for the MongoDB based upon the sorting parameters
+	  $mongo_key = 'views_datatables_cache_people_' . $sort_value . '_' . $sort_dir . '_' . $sort_begin;
+
+	  // Retrieve the cached data set from the MongoDB
+	  $cached_datatable_json = $mongo_collection->findOne(array('view' => $mongo_key));
+	  //if($cached_datatable_json) {
+	  if(false) {
+
+	    $data = $cached_datatable_json['data'];
+	    $data['draw'] = intval($_GET['draw']) + 1;
+
+	    return drupal_json_output($data);
+	  } else {
+	    
+	    // ...and if this data set hasn't been cached, prepare for delayed response
+	    set_time_limit(90);
+	  }
+	}
+
+	list($final_query, $solr_response) = dss_elc_metrics_datatables_query(array('human'), $request);
+
+	//print_r($final_query);
+	//print_r( $solr_response);
+	//exit(1);
+
+	$datatable_json = dss_elc_metrics_datatables_response($solr_response, array('human'));
+
+	/**
+	 * @author griffinj@lafayette.edu
+	 * Consistently update the MongoDB cache for cases in which the results were not filtered
+	 * @todo Invoke a hook implementation
+	 *
+	 */
+	if(!$filtered_by_search) {
+
+	  $mongo_collection->insert(array('view' => $mongo_key, 'data' => $datatable_json));
+	}
+  
+	if(true) {
+    
+	  return drupal_json_output($datatable_json);
+	}
+
+	exit(1);
+
 	//query for getting human nodes in the sorted in the specified order
 	$query->addMetaData('account', user_load(1))
 	->entityCondition('entity_type','node')
@@ -2538,9 +2608,10 @@ function _dss_elc_metrics_items_records_sort($records, $field = 'title', $order 
  */
 function _dss_elc_mongodb_get_collection($collection_name = 'views_datatables_cache', $db = 'dss_elc_mongodb', $options = array()) {
 
-  $host = variable_get('dss_elc_metrics_mongodb_host', 'santorini0.lafayette.edu');
+  $host = variable_get('dss_elc_metrics_mongodb_host', 'santorini0.stage.lafayette.edu');
 
-  $mongo = new Mongo($host, $options);
+  //$mongo = new Mongo($host, $options);
+  $mongo = new MongoClient($host, $options);
   $mongo_db = $mongo->selectDB($db);
   $mongo_collection = $mongo_db->selectCollection($collection_name);
 
@@ -2552,7 +2623,9 @@ function _dss_elc_mongodb_get_collection($collection_name = 'views_datatables_ca
  * this returns a json object wnich will be sent to the webpage for DataTables implementation.
  * @author stathisw@lafayette.edu
  */
-function dss_elc_metrics_get_items(){
+function dss_elc_metrics_get_items($request = NULL) {
+
+  $request = !is_null($request) ? $request : $_GET;
 	
 	//Declaring query object
 	$query = new EntityFieldQuery();
@@ -2560,7 +2633,7 @@ function dss_elc_metrics_get_items(){
 	//choosing which column has been clicked for sorting
 	switch(intval($_GET['order']['0']['column'])){
 		
-		case 0://author
+	case 0://author
 			$sort_value = 'field_artifact_was_authored_by';
 			break;
 			
@@ -2617,14 +2690,42 @@ function dss_elc_metrics_get_items(){
 
 	  // Retrieve the cached data set from the MongoDB
 	  $cached_datatable_json = $mongo_collection->findOne(array('view' => $mongo_key));
-	  if($cached_datatable_json) {
+	  if($cached_datatable_json and false) {
 
 	    $data = $cached_datatable_json['data'];
 	    $data['draw'] = intval($_GET['draw']) + 1;
 
 	    return drupal_json_output($data);
+	  } else {
+      
+	    // ...and if this data set hasn't been cached, prepare for delayed response
+	    set_time_limit(90);
 	  }
 	}
+
+	list($final_query, $solr_response) = dss_elc_metrics_datatables_query(array('item', 'book', 'periodical'), $request);
+	$datatable_json = dss_elc_metrics_datatables_response($solr_response, array('item', 'book', 'periodical'));
+
+	print_r($datatable_json);
+	exit(1);
+
+	/**
+	 * @author griffinj@lafayette.edu
+	 * Consistently update the MongoDB cache for cases in which the results were not filtered
+	 * @todo Invoke a hook implementation
+	 *
+	 */
+	if(!$filtered_by_search) {
+
+	  $mongo_collection->insert(array('view' => $mongo_key, 'data' => $datatable_json));
+	}
+  
+	if(true) {
+    
+	  return drupal_json_output($datatable_json);
+	}
+
+	exit(1);
 
 	//If we are sorting by any column other than author, volumes, or subject, do this
 	if($sort_value != 'field_artifact_was_authored_by' && $sort_value != 'field_item_volume_migrate' && $sort_value != 'field_item_subject'){
@@ -2832,99 +2933,460 @@ function dss_elc_metrics_get_items(){
 	return drupal_json_output($datatable_json);
 }
 
+function dss_elc_metrics_apachesolr_index_document_build($document, $entity, $entity_type) {
+
+  /**
+   * Expose certain fields for Solr to index
+   * These shall need to explicitly dereference certain field values (i. e. references)
+   *
+   */
+
+  if($entity_type == 'node') {
+
+    if($entity->type == 'loan') {
+
+      // For Loans, the following fields must be filtered:
+      // Shareholder (dereferenced)
+      // Representative (dereferenced)
+      // Checkout
+      // Vols
+      // Modified
+
+      //field_loan_shareholder
+      //field_bib_rel_subject
+      //field_bib_rel_object
+      //field_loan_duration
+      //field_loan_volumes_loaned
+      //changed
+
+      foreach(array('field_loan_shareholder',
+		    'field_bib_rel_subject',
+		    'field_bib_rel_object'
+		    ) as $entity_reference_field) {
+
+	/*
+	  $shareholder = node_load($entity->field_loan_shareholder[$entity->language][0]['target_id']);
+	  $representative = $entity->field_bib_rel_subject[$entity->language][0]['target_id'];
+	  $item = $entity->field_bib_rel_object[$entity->language][0]['target_id'];
+
+	  $document->addField('ts_field_loan_shareholder_label', $shareholder->title);
+	  $document->addField('ts_field_bib_rel_subject_label', $representative->title);
+	  $document->addField('ts_field_bib_rel_object_label', $item->title);
+	*/
+	
+	if(property_exists($entity, $entity_reference_field) and !empty($entity->{$entity_reference_field}[$entity->language])) {
+
+	  $entity_reference = node_load($entity->{$entity_reference_field}[$entity->language][0]['target_id']);
+
+	  //watchdog('dss_elc_metrics', 'entity title: %title', array('%title' => $entity_reference->title, WATCHDOG_NOTICE));
+	  $document->addField("sm_" . $entity_reference_field . "_label", $entity_reference->title);
+	}
+      }
+
+      foreach(array('field_loan_duration') as $entity_field) {
+
+	if(property_exists($entity, $entity_field) and !empty($entity->{$entity_field}[$entity->language])) {
+
+	  $document->addField("sm_" . $entity_field . "_value", $entity->{$entity_field}[$entity->language][0]['value']);
+	}
+      }
+
+      //$document->addField('is_field_loan_volumes_loaned', $entity->field_text_field_name['und'][0]['value']);
+
+      $document->addField('sm_changed', $entity->changed);
+    } else if($entity->type == 'item' or
+	      $entity->type == 'book' or
+	      $entity->type == 'periodical') {
+
+      foreach(array('field_artifact_was_authored_by') as $entity_reference_field) {
+
+	if(property_exists($entity, $entity_reference_field) and !empty($entity->{$entity_reference_field}[$entity->language])) {
+
+	  // Add the custom field
+	  $entity_reference = node_load($entity->{$entity_reference_field}[$entity->language][0]['target_id']);
+	  $document->addField("ss_" . $entity_reference_field . "_label", $entity_reference->title);
+	}
+      }
+
+      //$document->addField("ss_label", $entity->title);
+
+      if(property_exists($entity, 'field_item_volume_migrate') and !empty($entity->field_item_volume_migrate[$entity->language])) {
+	  
+	$document->addField("ss_field_item_volume_migrate", $entity->field_item_volume_migrate[$entity->language][0]['value']);
+      }
+
+      foreach(array('field_artifact_type') as $entity_field) {
+
+	$type_map = array(0 => 'book',
+			  1 => 'periodical');
+	
+	if(property_exists($entity, $entity_field) and !empty($entity->{$entity_field}[$entity->language])) {
+	  
+	  //watchdog('dss_elc_metrics', 'type constant: %type', array('%type' => $type_map[$entity->{$entity_field}[$entity->language][0]['value']], WATCHDOG_NOTICE));
+	  $document->addField("ss_" . $entity_field . "_constant", $type_map[$entity->{$entity_field}[$entity->language][0]['value']]);
+	}
+      }
+
+      foreach(array('field_item_subject') as $taxon_field) {
+
+	if(property_exists($entity, $taxon_field) and !empty($entity->{$taxon_field}[$entity->language])) {
+
+	$subject = taxonomy_term_load($entity->{$taxon_field}[$entity->language][0]['tid']);
+	$document->addField("ss_" . $taxon_field, $subject->name);
+	}
+      }
+
+      $document->addField('is_changed', $entity->changed);
+    } else if($entity->type == 'human') {
+
+      watchdog('dss_elc_metrics', 'type constant: %title', array('%title' => $entity->title, WATCHDOG_NOTICE));
+
+      //$document->addField("ss_label", $entity->title);
+      $document->addField('is_changed', $entity->changed);
+    }
+  }
+}
+
 /**
  *
+ * Transform the collection of Solr documents within a response into a DataTables JSON Object
  *
  */
-function dss_elc_metrics_get_loans(){
+function dss_elc_metrics_datatables_response($response, $bundles) {
+
+  $total_records = 32000;
+
+  //correctly formatting the JSON return object metadata
+  $datatable_json = array("draw" => intval($_GET['draw'])+1,
+			  "iTotalRecords" => $total_records,
+			  "iTotalDisplayRecords" => $response->response->numFound,
+			  "aaData" => array()
+			  );
+
+  foreach($response->response->docs as $count => $doc) {
+
+    // For loans
+    if(in_array('loan', $bundles)) {
+
+      $datatable_json['aaData'][$count] = array($doc->sm_field_bib_rel_subject_label[0],
+						$doc->sm_field_loan_shareholder_label[0],
+						$doc->sm_field_loan_duration[0],
+						$doc->label);
+
+      array_push($datatable_json['aaData'][$count],
+		 implode(',', $doc->sm_field_loan_volumes_loaned),
+		 $doc->ds_last_comment_or_change,
+		 $doc->entity_id,
+		 $doc->entity_id);
+    } elseif(in_array('item', $bundles)) {
+
+      $item_type_constant = (property_exists($doc, $sm_field_artifact_type_constant) and !empty($doc->sm_field_artifact_type_constant)) ? $doc->sm_field_artifact_type_constant[0] : $doc->bundle_name;
+
+      $datatable_json['aaData'][$count] = array(!is_null($doc->sm_field_artifact_was_authored_by_label[0]) ? $doc->sm_field_artifact_was_authored_by_label[0] : '[Illegible]',
+						$doc->label,
+						$doc->im_field_item_volume_migrate[0],
+						$item_type_constant,
+						implode(',', $doc->sm_field_item_subject),
+						$doc->ds_last_comment_or_change,
+						$doc->entity_id,
+						$doc->entity_id
+						);
+
+    } elseif(in_array('human', $bundles)) {
+
+      //print_r($doc);
+      //exit(1);
+
+      $datatable_json['aaData'][$count] = array($doc->label,
+						$doc->is_changed,
+						$doc->entity_id,
+						$doc->entity_id
+						);
+    }
+  }
+
+  return $datatable_json;
+}
+
+/**
+ * Query using the DataTables GET request
+ * @author griffinj@lafayette.edu
+ *
+ */
+function dss_elc_metrics_datatables_query($bundles, $request) {
+
+  // Simple search query (not fully tested)
+  // class_exists('Apache_Solr_Service') ?: spl_autoload_register('_search_api_solr_autoload'); // make sure that SolrPhpClient class is loaded (use only for <=rc3)
+  $url = variable_get('apachesolr_host', 'localhost');
+
+  $solr = new DrupalApacheSolrService('http://santorini0.stage.lafayette.edu:8080/solr' . '/' . 'elc');
+  $solr_field_map = array('loan' => array('sm_field_loan_shareholder_label',
+					  'sm_field_bib_rel_subject_label',
+					  'sm_field_loan_duration_value',
+					  'sm_field_bib_rel_object_label',
+					  'sm_field_loan_volumes_loaned',
+					  'sm_changed'),
+			  'item' => array('sm_field_artifact_was_authored_by_label',
+					  'label',
+					  'im_field_item_volume_migrate',
+					  'sm_field_artifact_type_constant',
+					  'sm_field_item_subject',
+					  'sm_changed'),
+			  'human' => array('label',
+					   'sm_changed')
+			  );
+
+  $first_bundle = $bundles[0];
+
+  $bundle_query = array_map(function($bundle) {
+
+      return 'bundle:' . $bundle;
+    }, $bundles);
+
+  if(count($bundle_query) == 1) {
+
+    $bundle_query = $bundle_query[0];
+  } else {
+
+    $bundle_query = '(' . implode(' OR ', $bundle_query) . ')';
+  }
+  
+  $query = array();
+
+  foreach($request['columns'] as $i => $search) {
+
+    if(trim($search['search']['value']) != '' ) {
+	    
+      $query[] = $solr_field_map[$first_bundle][$i] . ':' . trim($search['search']['value']) . '*';
+    }
+  }
+
+  $query_string = $bundle_query;
+
+  if(!empty($query) ) {
+
+    $query_string .= ' AND ';
+  }
+  $query_string .= implode(' AND ', $query);
+
+  $sort = 'sort_' . $solr_field_map[$first_bundle][intval($request['order']['0']['column'])] . ' ' . $request['order']['0']['dir'];
+
+  $params = array('q' => $query_string,
+		  //'rows' => 100000,
+		  'rows' => ($request['length'] / 5),
+
+		  //'start' => $request['start'],
+		  'sort' => $sort
+		  );
+
+  // This is the object that knows about the query coming from the user.
+  $query = apachesolr_drupal_query('views_datatables_' . $first_bundle, $params, $sort, '', $solr);
+
+  /*
+  if ($query->getParam('q')) {
+
+    apachesolr_search_add_spellcheck_params($query);
+  }
+  */
+
+  $query->page = $request['start'] / ($request['length'] / 5);
+
+  return apachesolr_do_query($query);
+}
+
+function dss_elc_metrics_apachesolr_query_alter(&$query) {
+
+  if(!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
+
+    // Required to override the paging functionality
+    //$query->page = $request['start'] / ($request['length'] / 5);
+    $query->addParam('rows', 1000000);
+  }
+
+  //print_r($query);
+  //exit(1);
+}
+
+/**
+ * Callback for retrieving loans
+ *
+ */
+function dss_elc_metrics_get_loans($request = NULL) {
+
+  $request = !is_null($request) ? $request : $_GET;
 	
-	//Declaring query object
-	$query = new EntityFieldQuery();
-	
-	//choosing which column has been clicked for sorting
-	switch(intval($_GET['order']['0']['column'])){
-		
-		case 0://shareholder
-			$sort_value = 'field_loan_shareholder';
-			break;
+  //Declaring query object
+  $query = new EntityFieldQuery();
+  
+  //choosing which column has been clicked for sorting
+  switch(intval($request['order']['0']['column'])){
+    
+  case 0://shareholder
+    //$sort_value = 'field_loan_shareholder';
+    $sort_value = 'sm_field_loan_shareholder_label';
+    break;
+    
+  case 1://representative
+    //$sort_value = 'field_bib_rel_subject';
+    $sort_value = 'sm_field_bib_rel_subject_label';
+    break;
+    
+  case 2://checkout
+    $sort_value = 'dm_field_loan_duration';
+    break;
+    
+  case 3://item title
+    //$sort_value = 'field_bib_rel_object';
+    $sort_value = 'sm_field_bib_rel_object_label';
+    break;
+    
+  case 4://vols
+    //$sort_value = 'field_loan_volumes_loaned';
+    $sort_value = 'sm_field_loan_volumes_loaned';
+    break;
+    
+  case 5://modified
+    //$sort_value = 'changed';
+    $sort_value = 'sm_changed';
+    break;
 			
-		case 1://representative
-			$sort_value = 'field_bib_rel_subject';
-			break;
-			
-		case 2://checkout
-			$sort_value = 'field_loan_duration';
-			break;
-		
-		case 3://item title
-			$sort_value = 'field_bib_rel_object';
-			break;
-			
-		case 4://vols
-			$sort_value = 'field_loan_volumes_loaned';
-			break;
-			
-		case 5://modified
-			$sort_value = 'changed';
-			break;
-			
-		default:
-			$sort_value = 'title';
-			break;
-		
-	}
+  default:
+    //$sort_value = 'title';
+    $sort_value = 'label';
+    break;
+    
+  }
 
-	/**
-	 * griffinj@lafayette.edu
-	 * Integrate MongoDB caching for unfiltered data sets
-	 * @todo Refactor for hook implementations
-	 */
-	$sort_dir = $_GET['order']['0']['dir'];
-	// Extend for sorting involving start values
-	// Resolves EDDC-367
-	$sort_begin = $_GET['start'];
+  /**
+   * griffinj@lafayette.edu
+   * Integrate MongoDB caching for unfiltered data sets
+   * @todo Refactor for hook implementations
+   */
 
-	$mongo_collection = _dss_elc_mongodb_get_collection('views_datatables_cache');
-
-	// @todo Refactor into a map/reduce operation?
-	$filtered_by_search = FALSE;
-	foreach($_GET['columns'] as $columnar_data) {
-
-	  //$filtered_by_search = trim($columnar_data['search']['value']) != '' or $filtered_by_search;
-	  $filtered_by_search = !empty($columnar_data['search']['value']) + $filtered_by_search;
-	}
-
-	if(!$filtered_by_search) {
-
-	  // Generate the Document pseudo-key for the MongoDB based upon the sorting parameters
-	  $mongo_key = 'views_datatables_cache_loans_' . $sort_value . '_' . $sort_dir . '_' . $sort_begin;
-
-	  // Retrieve the cached data set from the MongoDB
-	  $cached_datatable_json = $mongo_collection->findOne(array('view' => $mongo_key));
-	  if($cached_datatable_json) {
-
-	    $data = $cached_datatable_json['data'];
-	    $data['draw'] = intval($_GET['draw']) + 1;
-
-	    return drupal_json_output($data);
-	  }
-	}
-
-	//If we are sorting by last changed date
-	if($sort_value == 'changed'){
-		//query for getting books sorted in the appropriate way
-		$query->addMetaData('account', user_load(1))
-		->entityCondition('entity_type','node')
-		->entityCondition('bundle','loan')
-		->propertyOrderBy($sort_value,$_GET['order']['0']['dir']);
-		
-		$result = $query->execute();
-		
-		//load the nodes
-		$nodes = entity_load('node', array_keys($result['node']));
-		
-	}
-	//We are sorting by any other field 
+  $sort_dir = $request['order']['0']['dir'];
+  // Extend for sorting involving start values
+  // Resolves EDDC-367
+  $sort_begin = $request['start'];
+  
+  /*
+  //getting a query for all loans
+  $result = $query->addMetaData('account', user_load(1))
+  ->entityCondition('entity_type','node')
+  ->entityCondition('bundle','item')
+  ->range(0,4)
+  ->execute();
+  
+  //loading nodes from book query
+  $loans = entity_load('node', array_keys($result['node']));
+  
+  print_r($loans);
+  
+  $entity = $loans[197948];
+  
+  print_r($entity);
+  $tid = $entity->field_item_subject[$entity->language][0]['tid'];
+  
+  //print_r($tid);
+  $subject = taxonomy_term_load($tid);
+  //print_r($subject);
+  
+  exit(1);
+  */
+  
+  // Caching for non-filtered responses
+  $mongo_collection = _dss_elc_mongodb_get_collection('views_datatables_cache');
+  
+  // @todo Refactor into a map/reduce operation?
+  $filtered_by_search = FALSE;
+  foreach($request['columns'] as $columnar_data) {
+    
+    //$filtered_by_search = trim($columnar_data['search']['value']) != '' or $filtered_by_search;
+    $filtered_by_search = !empty($columnar_data['search']['value']) + $filtered_by_search;
+  }
+  
+  if(!$filtered_by_search) {
+    
+    // Generate the Document pseudo-key for the MongoDB based upon the sorting parameters
+    $mongo_key = 'views_datatables_cache_loans_' . $sort_value . '_' . $sort_dir . '_' . $sort_begin;
+    
+    // Retrieve the cached data set from the MongoDB
+    $cached_datatable_json = $mongo_collection->findOne(array('view' => $mongo_key));
+    if($cached_datatable_json) {
+      
+      $data = $cached_datatable_json['data'];
+      $data['draw'] = intval($request['draw']) + 1;
+      
+      return drupal_json_output($data);
+    } else {
+      
+      // ...and if this data set hasn't been cached, prepare for delayed response
+      set_time_limit(90);
+    }
+  }
+  
+  //list($final_query, $response) = apachesolr_do_query($query);
+  list($final_query, $solr_response) = dss_elc_metrics_datatables_query(array('loan'), $request);
+  
+  /*
+    $env_id = $query->solr('getId');
+    apachesolr_has_searched($env_id, TRUE);
+    $process_response_callback = apachesolr_environment_variable_get($env_id, 'process_response_callback', 'apachesolr_search_process_response');
+    if (function_exists($process_response_callback)) {
+    return call_user_func($process_response_callback, $response, $final_query);
+    }
+    else {
+    return apachesolr_search_process_response($response, $final_query);
+    }
+  */
+  
+  //print_r($response);
+  //print_r($final_query);
+  
+  /*
+    $server = search_api_server_load($url); // CHANGE THIS
+    $index = search_api_index_load('default_node_index'); // CHANGE THIS
+    $query = new SearchApiQuery($index);
+    $query->keys('foo');
+    $query->fields(array('title'));
+    $solr = new SearchApiSolrService($server);
+    $result = $solr->search($query);
+    drupal_set_message(print_r($result, TRUE));
+  */
+  
+  $datatable_json = dss_elc_metrics_datatables_response($solr_response);
+  
+  /**
+   * @author griffinj@lafayette.edu
+   * Consistently update the MongoDB cache for cases in which the results were not filtered
+   * @todo Invoke a hook implementation
+   *
+   */
+  if(!$filtered_by_search) {
+    
+    $mongo_collection->insert(array('view' => $mongo_key, 'data' => $datatable_json));
+  }
+  
+  if(true) {
+    
+    return drupal_json_output($datatable_json);
+  }
+  exit(1);
+  
+  //If we are sorting by last changed date
+  if($sort_value == 'changed'){
+    //query for getting books sorted in the appropriate way
+    $query->addMetaData('account', user_load(1))
+      ->entityCondition('entity_type','node')
+      ->entityCondition('bundle','loan')
+      ->propertyOrderBy($sort_value,$_GET['order']['0']['dir']);
+    
+    $result = $query->execute();
+    
+    //load the nodes
+    $nodes = entity_load('node', array_keys($result['node']));
+    
+  }
+  //We are sorting by any other field 
 	else{
 		//getting a query for all loans
 		$result = $query->addMetaData('account', user_load(1))
