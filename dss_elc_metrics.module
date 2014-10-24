@@ -2357,6 +2357,7 @@ function dss_elc_metrics_get_people($request) {
 
 	$query = new EntityFieldQuery();
 	
+	/*
 	//choosing which column has been clicked for sorting
 	switch($_GET['order']['0']['column']){
 		
@@ -2372,6 +2373,12 @@ function dss_elc_metrics_get_people($request) {
 			$sort_value = 'title';
 			break;
 	}
+	*/
+
+	$sort_value_map = array('sort_label',
+				'is_changed');
+	
+	$sort_value = $sort_value_map[intval($request['order']['0']['column'])];
 
 	/**
 	 * griffinj@lafayette.edu
@@ -2410,7 +2417,7 @@ function dss_elc_metrics_get_people($request) {
 	  } else {
 	    
 	    // ...and if this data set hasn't been cached, prepare for delayed response
-	    set_time_limit(90);
+	    set_time_limit(420);
 	  }
 	}
 
@@ -2430,7 +2437,10 @@ function dss_elc_metrics_get_people($request) {
 	 */
 	if(!$filtered_by_search) {
 
-	  $mongo_collection->insert(array('view' => $mongo_key, 'data' => $datatable_json));
+	  //$mongo_collection->insert(array('view' => $mongo_key, 'data' => $datatable_json));
+	  $mongo_collection->update(array('view' => $mongo_key),
+				    array('view' => $mongo_key, 'data' => $datatable_json),
+				    array('upsert' => TRUE));
 	}
   
 	if(true) {
@@ -2630,6 +2640,7 @@ function dss_elc_metrics_get_items($request = NULL) {
 	//Declaring query object
 	$query = new EntityFieldQuery();
 	
+	/*
 	//choosing which column has been clicked for sorting
 	switch(intval($_GET['order']['0']['column'])){
 		
@@ -2660,8 +2671,18 @@ function dss_elc_metrics_get_items($request = NULL) {
 		default:
 			$sort_value = 'title';
 			break;
-		
+			
 	}
+	*/
+
+	$sort_value_map = array('sort_field_artifact_was_authored_by_label',
+				'sort_label',
+				'is_field_item_volume_migrate',
+				'bundle',
+				'sort_field_item_subject',
+				'is_changed');
+	
+	$sort_value = $sort_value_map[intval($request['order']['0']['column'])];
 
 	/**
 	 * griffinj@lafayette.edu
@@ -2690,7 +2711,7 @@ function dss_elc_metrics_get_items($request = NULL) {
 
 	  // Retrieve the cached data set from the MongoDB
 	  $cached_datatable_json = $mongo_collection->findOne(array('view' => $mongo_key));
-	  if($cached_datatable_json and false) {
+	  if($cached_datatable_json) {
 
 	    $data = $cached_datatable_json['data'];
 	    $data['draw'] = intval($_GET['draw']) + 1;
@@ -2699,7 +2720,7 @@ function dss_elc_metrics_get_items($request = NULL) {
 	  } else {
       
 	    // ...and if this data set hasn't been cached, prepare for delayed response
-	    set_time_limit(90);
+	    set_time_limit(420);
 	  }
 	}
 
@@ -2924,7 +2945,10 @@ function dss_elc_metrics_get_items($request = NULL) {
 	 */
 	if(!$filtered_by_search) {
 
-	  $mongo_collection->insert(array('view' => $mongo_key, 'data' => $datatable_json));
+	  //$mongo_collection->insert(array('view' => $mongo_key, 'data' => $datatable_json));
+	  $mongo_collection->update(array('view' => $mongo_key),
+				    array('view' => $mongo_key, 'data' => $datatable_json),
+				    array('upsert' => TRUE));
 	}
 
 	return drupal_json_output($datatable_json);
@@ -3247,7 +3271,10 @@ function dss_elc_metrics_datatables_query($bundles, $request) {
 		  );
 
   // This is the object that knows about the query coming from the user.
-  $query = apachesolr_drupal_query('views_datatables_' . $first_bundle, $params, $sort, '', $solr);
+  $query_name = implode('_', array('views_datatables', $first_bundle, $query_string, $sort));
+  $query_name = preg_replace('/s/', '_', $query_name);
+  
+  $query = apachesolr_drupal_query($query_name, $params, $sort, '', $solr);
 
   /*
   if ($query->getParam('q')) {
@@ -3255,9 +3282,13 @@ function dss_elc_metrics_datatables_query($bundles, $request) {
     apachesolr_search_add_spellcheck_params($query);
   }
   */
-
   $query->page = $request['start'] / ($request['length'] / 5);
+
   list($query, $solr_response) = apachesolr_do_query($query);
+
+  //print_r($query);
+  //print_r($solr_response->response->docs[0]);
+  //exit(1);
 
   if($is_unfiltered_query) {
 
@@ -3291,6 +3322,7 @@ function dss_elc_metrics_get_loans($request = NULL) {
   //Declaring query object
   $query = new EntityFieldQuery();
   
+  /*
   //choosing which column has been clicked for sorting
   switch(intval($request['order']['0']['column'])){
     
@@ -3329,6 +3361,16 @@ function dss_elc_metrics_get_loans($request = NULL) {
     break;
     
   }
+  */
+
+  $sort_value_map = array('sort_field_loan_shareholder_label',
+			  'sort_field_bib_rel_subject_label',
+			  'is_field_loan_duration_value',
+			  'sort_field_bib_rel_object_label',
+			  'is_field_loan_volumes_loaned_first',
+			  'is_changed');
+
+  $sort_value = $sort_value_map[intval($request['order']['0']['column'])];
 
   /**
    * griffinj@lafayette.edu
@@ -3340,31 +3382,6 @@ function dss_elc_metrics_get_loans($request = NULL) {
   // Extend for sorting involving start values
   // Resolves EDDC-367
   $sort_begin = $request['start'];
-  
-  /*
-  //getting a query for all loans
-  $result = $query->addMetaData('account', user_load(1))
-  ->entityCondition('entity_type','node')
-  ->entityCondition('bundle','item')
-  ->range(0,4)
-  ->execute();
-  
-  //loading nodes from book query
-  $loans = entity_load('node', array_keys($result['node']));
-  
-  print_r($loans);
-  
-  $entity = $loans[197948];
-  
-  print_r($entity);
-  $tid = $entity->field_item_subject[$entity->language][0]['tid'];
-  
-  //print_r($tid);
-  $subject = taxonomy_term_load($tid);
-  //print_r($subject);
-  
-  exit(1);
-  */
   
   // Caching for non-filtered responses
   $mongo_collection = _dss_elc_mongodb_get_collection('views_datatables_cache');
@@ -3384,7 +3401,7 @@ function dss_elc_metrics_get_loans($request = NULL) {
     
     // Retrieve the cached data set from the MongoDB
     $cached_datatable_json = $mongo_collection->findOne(array('view' => $mongo_key));
-    if($cached_datatable_json and false) {
+    if($cached_datatable_json) {
       
       $data = $cached_datatable_json['data'];
       $data['draw'] = intval($request['draw']) + 1;
@@ -3393,9 +3410,10 @@ function dss_elc_metrics_get_loans($request = NULL) {
     } else {
       
       // ...and if this data set hasn't been cached, prepare for delayed response
-      set_time_limit(90);
+      set_time_limit(420);
     }
   }
+
 
   //list($final_query, $response) = apachesolr_do_query($query);
   list($final_query, $solr_response) = dss_elc_metrics_datatables_query(array('loan'), $request);
@@ -3409,7 +3427,9 @@ function dss_elc_metrics_get_loans($request = NULL) {
    */
   if(!$filtered_by_search) {
     
-    $mongo_collection->insert(array('view' => $mongo_key, 'data' => $datatable_json));
+    $mongo_collection->update(array('view' => $mongo_key),
+			      array('view' => $mongo_key, 'data' => $datatable_json),
+			      array('upsert' => TRUE));
   }
   
   if(true) {
