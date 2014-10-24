@@ -19,29 +19,32 @@ function dss_elc_metrics_drush_command() {
 			      ),
 	  'aliases' => array(''));
 
-  $items['dss-elc-metrics-solr-index'] =
+  $items['dss-elc-metrics-solr-index-node'] =
     array('description' => dt('Index a Content Node within Apache Solr'),
 	  'arguments' => array('arg1' => dt(''),
 			       ),
 	  'examples' => array(
-			      'Standard example' => 'drush dss-elc-metrics-solr-index',
+			      'Standard example' => 'drush dss-elc-metrics-solr-index-node',
+			      ),
+	  'aliases' => array(''));
+
+  $items['dss-elc-metrics-solr-index-nodes'] =
+    array('description' => dt('Index a set of Content Nodes within Apache Solr'),
+	  'arguments' => array('arg1' => dt(''),
+			       ),
+	  'examples' => array(
+			      'Standard example' => 'drush dss-elc-metrics-solr-index-nodes',
 			      ),
 	  'aliases' => array(''));
 
   return $items;
   }
 
-function drush_dss_elc_metrics_solr_index($nid, $env_id = 'solr') {
+function drush_dss_elc_metrics_solr_index_node($nid, $env_id = 'solr') {
 
+  drush_log(dt('Preparing to (re)index the Node ' . $nid), 'ok');
   $node = node_load($nid);
-  //apachesolr_mark_entity('node', $nid);
   module_load_include('inc', 'apachesolr',  'apachesolr.index');
-
-  $rows = apachesolr_index_get_entities_to_index($env_id, 'node', 2);
-
-  print_r($rows);
-
-  //print_r($node);
 
   // Retrieve the node to be indexed
   $rows = array( (Object) array('entity_type' => 'node',
@@ -50,24 +53,47 @@ function drush_dss_elc_metrics_solr_index($nid, $env_id = 'solr') {
 				'status' => $node->status,
 				'changed' => $node->changed) );
 
-  print_r($rows);
-
   $documents = array();
+
   foreach ($rows as $row) {
 
     $row_documents = apachesolr_index_entities_document($row, 'node', $env_id);
     $documents = array_merge($documents, $row_documents);
   }
 
-  print_r($documents);
-
   $indexed = apachesolr_index_send_to_solr($env_id, $documents);
   if ($indexed == FALSE) {
 
     drush_log(dt('Failed to index the Node ' . $node->nid), 'error');
   } else {
-
+    
     drush_log(dt('Successfully indexed the Node ' . $node->nid), 'success');
+  }
+}
+
+/**
+ * Batch indexing of content nodes
+ * Selected by bundle and limits
+ *
+ */
+function drush_dss_elc_metrics_solr_index_nodes($bundle, $env_id = 'solr', $limit = NULL) {
+
+  $query = new EntityFieldQuery();
+  $query->entityCondition('entity_type', 'node')
+    ->entityCondition('bundle', $bundle);
+
+  if(!is_null($limit)) {
+
+    $query->range(0, intval($limit));
+  }
+
+  $result = $query->execute();
+  if (isset($result['node'])) {
+
+    foreach(array_keys($result['node']) as $nid) {
+
+      drush_dss_elc_metrics_solr_index_node($nid, $env_id);
+    }
   }
 }
 

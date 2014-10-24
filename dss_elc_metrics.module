@@ -3018,7 +3018,7 @@ function dss_elc_metrics_apachesolr_index_document_build($document, $entity, $en
 
 	if(property_exists($entity, $entity_field) and !empty($entity->{$entity_field}[$entity->language])) {
 
-	  $document->addField("is_" . $entity_field . "_first", $entity->{$entity_field}[$entity->language][0]['value']);
+	  $document->addField("is_" . $entity_field . "_first", intval($entity->{$entity_field}[$entity->language][0]['value']));
 	}
       }
 
