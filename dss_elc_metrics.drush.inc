@@ -97,6 +97,68 @@ function drush_dss_elc_metrics_solr_index_nodes($bundle, $env_id = 'solr', $limi
   }
 }
 
+function drush_dss_elc_metrics_cache_loans($nid) {
+
+  // Make the request to Solr
+  $request = array();
+
+  $mongo_collection = _dss_elc_mongodb_get_collection('views_datatables_cache');
+
+  $view_map = array('loans' => array('fields' => array('sort_field_loan_shareholder_label',
+						       'sort_field_bib_rel_subject_label',
+						       'is_field_loan_duration_value',
+						       'sort_field_bib_rel_object_label',
+						       'is_field_loan_volumes_loaned_first',
+						       'is_changed'),
+				     'bundles' => array('loan')
+				     ),
+		    );
+
+  $filter_query = '(sm_field_bib_rel_subject:"' . $nid . '" OR sm_field_bib_rel_object:"' . $nid . '")';
+
+  foreach($view_map as $view => $values) {
+
+    foreach($values['fields'] as $sort_value) {
+
+      $bundles = $values['bundles'];
+
+      foreach(array('asc', 'desc') as $sort_dir) {
+
+	$mongo_key = 'views_datatables_cache_' . $view . '_' . $sort_value . '_' . $sort_dir . '_' . preg_replace('/\:/', '_', $nid) . '_' . 0;
+
+	$request = array();
+
+	$request['columns'] = array();
+	//$request['order']['0']['column'] = $sort_value;
+	$request['order']['0']['column'] = array_search($sort_value, $values['fields']);
+	$request['order']['0']['dir'] = $sort_dir;
+	$request['length'] = 50;
+	$request['start'] = 0;
+
+	// Spoof the header for AJAX handling
+	$_SERVER['HTTP_X_REQUESTED_WITH'] = 'xmlhttprequest';
+
+	set_time_limit(420);
+
+	drush_log(dt('Caching the DataTables Object for the MongoDB Document ' . $mongo_key . '...'), 'ok');
+	
+	list($final_query, $solr_response) = dss_elc_metrics_datatables_query($bundles, $request, $filter_query);
+
+	drush_log(dt('The response to the Solr query was successfully received'), 'success');
+
+	$datatable_json = dss_elc_metrics_datatables_response($solr_response, $bundles);
+	
+	// Cache the response
+	//$mongo_collection->insert(array('view' => $mongo_key, 'data' => $datatable_json));
+	$mongo_collection->update(array('view' => $mongo_key),
+				  array('view' => $mongo_key, 'data' => $datatable_json),
+				  array('upsert' => TRUE));
+	drush_log(dt('The DataTables Object was successfully cached in the MongoDB Collection ' . 'views_datatables_cache'), 'success');
+      }
+    }
+  }  
+}
+
 function drush_dss_elc_metrics_cache($view = NULL, $sort_value = NULL) {
 
   // Make the request to Solr
