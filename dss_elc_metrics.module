@@ -36,8 +36,7 @@ function dss_elc_metrics_menu() {
 						       ),
 		 'datatable_loan/views/loans' => array('page callback' => 'dss_elc_metrics_get_loans',
 						       'access callback' => TRUE,
-						       'page arguments' => array(1),
-						       ),				 		 
+						       ),
 		 );
 
   return $items;
@@ -3242,7 +3241,8 @@ function dss_elc_metrics_datatables_query($bundles, $request, $filter_query = NU
 
   $params = array('q' => $query_string,
 		  //'rows' => 100000,
-		  'rows' => ($request['length'] / 5),
+		  //'rows' => ($request['length'] / 5),
+		  'rows' => $request['length'],
 
 		  //'start' => $request['start'],
 		  'sort' => $sort
@@ -3288,27 +3288,28 @@ function dss_elc_metrics_apachesolr_query_alter(&$query) {
 
     // Required to override the paging functionality
     //$query->page = $request['start'] / ($request['length'] / 5);
-    $query->addParam('rows', 1000000);
+    $query->page = $request['start'] / $request['length'];
+    //$query->addParam('rows', 1000000);
   }
 
-  //print_r($query);
-  //exit(1);
 }
 
 /**
  * Callback for retrieving loans
  *
  */
-function dss_elc_metrics_get_loans($nid = NULL, $request = NULL) {
+function dss_elc_metrics_get_loans($request = NULL) {
+
+  $request = !is_null($request) ? $request : $_GET;
+  $nid = array_key_exists('nid', $request) ? $nid : NULL;
 
   $filter_query = NULL;
+
   if(!is_null($nid)) {
 
     $filter_query = '(sm_field_bib_rel_subject:"' . $nid . '" OR sm_field_bib_rel_object:"' . $nid . '")';
   }
 
-  $request = !is_null($request) ? $request : $_GET;
-	
   //Declaring query object
   $query = new EntityFieldQuery();
   
@@ -3397,7 +3398,6 @@ function dss_elc_metrics_get_loans($nid = NULL, $request = NULL) {
       $mongo_key = 'views_datatables_cache_loans_' . $sort_value . '_' . $sort_dir . '_' . $sort_begin;
     }
     
-    
     // Retrieve the cached data set from the MongoDB
     $cached_datatable_json = $mongo_collection->findOne(array('view' => $mongo_key));
     if($cached_datatable_json) {
@@ -3407,7 +3407,7 @@ function dss_elc_metrics_get_loans($nid = NULL, $request = NULL) {
       
       return drupal_json_output($data);
     } else {
-      
+
       // ...and if this data set hasn't been cached, prepare for delayed response
       set_time_limit(420);
     }
