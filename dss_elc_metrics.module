@@ -2385,7 +2385,9 @@ function dss_elc_metrics_get_people($request) {
 	$sort_dir = $_GET['order']['0']['dir'];
 	// Extend for sorting involving start values
 	// Resolves EDDC-367
-	$sort_begin = $_GET['start'];
+	$start = $_GET['start'];
+
+	$rows = $_GET['length'];
 
 	$mongo_collection = _dss_elc_mongodb_get_collection('views_datatables_cache');
 
@@ -2400,7 +2402,8 @@ function dss_elc_metrics_get_people($request) {
 	if(!$filtered_by_search) {
 
 	  // Generate the Document pseudo-key for the MongoDB based upon the sorting parameters
-	  $mongo_key = 'views_datatables_cache_people_' . $sort_value . '_' . $sort_dir . '_' . $sort_begin;
+	  //$mongo_key = 'views_datatables_cache_people_' . $sort_value . '_' . $sort_dir . '_' . $sort_begin;
+	  $mongo_key = dss_elc_metrics_views_datatables_mongo_key('views_datatables_cache', 'items', $sort_value, $sort_dir, $start, $rows);
 
 	  // Retrieve the cached data set from the MongoDB
 	  $cached_datatable_json = $mongo_collection->findOne(array('view' => $mongo_key));
@@ -2689,7 +2692,8 @@ function dss_elc_metrics_get_items($request = NULL) {
 	$sort_dir = $_GET['order']['0']['dir'];
 	// Extend for sorting involving start values
 	// Resolves EDDC-367
-	$sort_begin = $_GET['start'];
+	$start = $_GET['start'];
+	$row = $_GET['length'];
 
 	$mongo_collection = _dss_elc_mongodb_get_collection('views_datatables_cache');
 
@@ -2704,7 +2708,8 @@ function dss_elc_metrics_get_items($request = NULL) {
 	if(!$filtered_by_search) {
 
 	  // Generate the Document pseudo-key for the MongoDB based upon the sorting parameters
-	  $mongo_key = 'views_datatables_cache_items_' . $sort_value . '_' . $sort_dir . '_' . $sort_begin;
+	  //$mongo_key = 'views_datatables_cache_items_' . $sort_value . '_' . $sort_dir . '_' . $sort_begin;
+	  $mongo_key = dss_elc_metrics_views_datatables_mongo_key('views_datatables_cache', 'items', $sort_value, $sort_dir, $start, $rows);
 
 	  // Retrieve the cached data set from the MongoDB
 	  $cached_datatable_json = $mongo_collection->findOne(array('view' => $mongo_key));
@@ -3294,6 +3299,18 @@ function dss_elc_metrics_apachesolr_query_alter(&$query) {
 
 }
 
+function dss_elc_metrics_views_datatables_mongo_key($prefix, $view, $sort_value, $sort_dir, $start, $rows, $nid = NULL) {
+
+  $mongo_key = implode('_', array($prefix, $view, $sort_value, $sort_dir, $start, $rows));
+
+  if(!is_null($nid)) {
+
+    $mongo_key .= preg_replace('/\:/', '_', $nid);
+  }
+
+  return $mongo_key;
+}
+
 /**
  * Callback for retrieving loans
  *
@@ -3372,7 +3389,9 @@ function dss_elc_metrics_get_loans($request = NULL) {
   $sort_dir = $request['order']['0']['dir'];
   // Extend for sorting involving start values
   // Resolves EDDC-367
-  $sort_begin = $request['start'];
+  $start = $request['start'];
+  
+  $row = $request['length'];
   
   // Caching for non-filtered responses
   $mongo_collection = _dss_elc_mongodb_get_collection('views_datatables_cache');
@@ -3385,17 +3404,18 @@ function dss_elc_metrics_get_loans($request = NULL) {
     $filtered_by_search = !empty($columnar_data['search']['value']) + $filtered_by_search;
   }
 
-  
   if(!$filtered_by_search) {
 
-    if(!is_null($nid) and false) {
+    // Generate the Document pseudo-key for the MongoDB based upon the sorting parameters
 
-      // Generate the Document pseudo-key for the MongoDB based upon the sorting parameters
-      $mongo_key = 'views_datatables_cache_loans_' . $sort_value . '_' . $sort_dir . '_' . preg_replace('/\:/', '_', $nid) . '_' . $sort_begin;
+    if(!is_null($nid)) {
+
+      $mongo_key = dss_elc_metrics_views_datatables_mongo_key('views_datatables_cache', 'loans', $sort_value, $sort_dir, $start, $rows, preg_replace('/\:/', '_', $nid));
     } else {
 
       // Generate the Document pseudo-key for the MongoDB based upon the sorting parameters
-      $mongo_key = 'views_datatables_cache_loans_' . $sort_value . '_' . $sort_dir . '_' . $sort_begin;
+      //$mongo_key = 'views_datatables_cache_loans_' . $sort_value . '_' . $sort_dir . '_' . $start . '_' . $rows;
+      $mongo_key = dss_elc_metrics_views_datatables_mongo_key('views_datatables_cache', 'loans', $sort_value, $sort_dir, $start, $rows);
     }
     
     // Retrieve the cached data set from the MongoDB
