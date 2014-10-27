@@ -34,10 +34,10 @@ function dss_elc_metrics_menu() {
 		 'datatable_item/views/items' => array('page callback' => 'dss_elc_metrics_get_items',
 						       'access callback' => TRUE,
 						       ),
-		 'datatable_loan/views/loans/%' => array('page callback' => 'dss_elc_metrics_get_loans',
-							 'access callback' => TRUE,
-							 'page arguments' => array(1),
-							 ),				 		 
+		 'datatable_loan/views/loans' => array('page callback' => 'dss_elc_metrics_get_loans',
+						       'access callback' => TRUE,
+						       'page arguments' => array(1),
+						       ),				 		 
 		 );
 
   return $items;
@@ -3387,7 +3387,7 @@ function dss_elc_metrics_get_loans($nid = NULL, $request = NULL) {
   
   if(!$filtered_by_search) {
 
-    if(!is_null($nid)) {
+    if(!is_null($nid) and false) {
 
       // Generate the Document pseudo-key for the MongoDB based upon the sorting parameters
       $mongo_key = 'views_datatables_cache_loans_' . $sort_value . '_' . $sort_dir . '_' . preg_replace('/\:/', '_', $nid) . '_' . $sort_begin;
