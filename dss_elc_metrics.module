@@ -1,5 +1,7 @@
 <?php
 
+require_once dirname(__FILE__) . '/includes/apachesolr.inc';
+
 /**
  * Implements hook_menu()
  *
@@ -69,6 +71,9 @@ function dss_elc_metrics_univariate_ajax($content_type = NULL, $field = NULL) {
 
     $y_axis['property'] = 'value';
   }
+
+  // MongoDB caching
+  
 
   // First, retrieve every entity with this relationship
   $entity_query = new EntityFieldQuery();
@@ -1413,29 +1418,1004 @@ function dss_elc_metrics_cache_call($params, $callback, $force_update=FALSE, $co
   return $data;
 }
 
+function dss_elc_metrics_domain($node, $domain_field) {
+
+  /**
+   * For loans, these can be analyzed in relation to the following:
+   * - Shareholder Attributes
+   *   - Name
+   *   - Gender
+   * - Representative Attributes
+   *   - Name
+   *   - Gender
+   * - Checkout Date of the Loan
+   * - Item Attributes
+   *   - Title
+   *   - Subject
+   *   - Type
+   *   - Author Attributes
+   *     - Name
+   *     - Gender
+   */
+
+  if($domain_field == 'quantity') {
+
+    $domain = $node[0] . 's';
+  } else {
+
+    if($node->type == 'loan') {
+
+      // Shareholder attributes
+      
+      // Representative attributes
+
+      // Item attributes
+
+      // Author attributes
+    } elseif($node->type == 'item' or
+	     $node->type == 'book' or
+	     $node->type == 'periodical') {
+
+    } elseif($node->type == 'human') {
+      
+    }
+  }
+
+  return $domain;
+}
+
+function dss_elc_metrics_related_nodes($node, $sample_field, $group) {
+
+  // Perform the pseudo JOIN
+  // Retrieve the related loan nodes
+  //! @todo Abstract in order to support loans, personal relationships, and deeply nested relationships (e. g. total items loaned to persons with families of a certain size)
+  //! @todo Refactor using db_select().
+
+  //if(in_array($sample_field, array('field_human_gender'))) {
+  if(true) {
+
+    $query = new EntityFieldQuery();
+    $query->entityCondition('entity_type', 'node')
+      ->entityCondition('bundle', 'loan')
+      ->propertyCondition('status', NODE_PUBLISHED);
+
+    if($node->type == 'item' or
+       $node->type == 'book' or
+       $node->type == 'periodical') {
+
+      // Loans are linked to the Manifestation Node
+      $manifest_nid = $node->field_item_embodies[$node->language][0]['target_id'];
+      //$query->fieldCondition('field_bib_rel_object', 'target_id', $manifest_nid);
+    } elseif($node->type == 'human') {
+
+      $query->fieldCondition('field_bib_rel_subject', 'target_id', $node->nid);
+      $query->fieldCondition('field_loan_shareholder', 'target_id', $node->nid);
+    }
+
+    //$query->range(0, 10);
+    //$query->addMetaData('account', user_load(1)); // Run the query as user 1.
+    $result = $query->execute();
+
+    $relationships = array();
+    if(isset($result['node'])) {
+      
+      $nids = array_keys($result['node']);
+      $relationships = entity_load('node', $nids);
+    }
+  }
+
+  $related_nodes = array();
+
+  if($node->type == 'loan') {
+
+  } elseif($node->type == 'item' or
+	   $node->type == 'book' or
+	   $node->type == 'periodical') {
+
+    /*
+    $query = new EntityFieldQuery();
+    $query->entityCondition('entity_type', 'node')
+      //->entityCondition('bundle', array('item', 'book', 'periodical'), 'IN')
+      ->propertyCondition('status', NODE_PUBLISHED);
+
+    if(true) {
+
+      print $sample_field;
+      $query->fieldCondition($sample_field, 'value', );
+    }
+
+    //->fieldOrderBy('field_loan_duration', 'value', 'ASC')
+    //->addMetaData('account', user_load(1)); // Run the query as user 1.
+    $query->range(0, 10);
+
+    $result = $query->execute();
+    */
+
+    //print_r($relationships);
+    // Retrieve the nodes related to $node using the $relationships
+    foreach($relationships as $rel) {
+
+      //! @todo Refactor
+      $entity_reference_field = 'field_bib_rel_object';
+    
+      // Retrieve the related values
+      $related_values = $rel->$entity_reference_field[$rel->language];
+      foreach($related_values as $rel_val) {
+
+	if(in_array($entity_reference_field, array('field_bib_rel_object',
+						   'field_bib_rel_subject',
+						   'field_loan_shareholder'))) {
+
+	  // Retrieve the related node if this is a related value
+	  $related_node = node_load($rel_val);
+
+	  // Generate the sample using the sample field
+	  $sample = $related_node->$sample_field[$related_node->language][0]['value'];
+	} else {
+
+	  // Generate the sample using the related value itself
+	  $sample = $rel_val;
+	}
+
+	// Set the value
+	if(!array_key_exists($sample, $related_nodes)) {
+	  
+	  $related_nodes[$sample] = 1;
+	} else {
+	  
+	  $related_nodes[$sample]++;
+	}
+      }
+    }
+
+  } elseif($node->type == 'human') {
+
+    /*
+    $query = new EntityFieldQuery();
+    $query->entityCondition('entity_type', 'node')
+      ->entityCondition('bundle', 'human')
+      ->propertyCondition('status', NODE_PUBLISHED)
+      //->fieldOrderBy('field_loan_duration', 'value', 'ASC')
+      //->addMetaData('account', user_load(1)); // Run the query as user 1.
+      ->range(0, 10);
+
+    $result = $query->execute();
+    */
+  }
+
+  /*
+  $nodes = array();
+  if(isset($result['node'])) {
+    
+    $nids = array_keys($result['node']);
+    $nodes = entity_load('node', $nids);
+  }
+  */
+
+  //print_r($nodes);
+  //exit(1);
+
+  return $related_nodes;
+}
+
+function dss_elc_metrics_sample($node, $sample_field) {
+
+  //print $sample_field;
+  //print_r($node->type);
+
+  $field_sample_map = array('field_human_gender' => 'field_human_gender');
+  $node_field = $field_sample_map[$sample_field];
+
+  if(empty($node->{$sample_field})) {
+
+    $sample = 'Unknown';
+  } else {
+
+    $sample = $node->{$sample_field}[$node->language][0]['value'];
+  }
+
+  if($node->type == 'loan') {
+
+    // Shareholder attributes
+      
+    // Representative attributes
+
+    // Item attributes
+
+    // Author attributes
+  } elseif($node->type == 'item' or
+	   $node->type == 'book' or
+	   $node->type == 'periodical') {
+
+  } elseif($node->type == 'human') {
+
+    /*
+    $field_sample_map = array('field_human_gender' => 'field_human_gender');
+    $node_field = $field_sample_map[$sample_field];
+    if(empty($node->{$sample_field})) {
+
+      $sample = 'Unknown';
+    } else {
+
+      $sample = $node->{$sample_field}[$node->language][0]['value'];
+    }
+    */
+  }
+
+  return $sample;
+}
+
+//function dss_elc_metrics_db_parse($records, $bundles, $domain_field, $sample, $sample_field, $metric = 'sum') {
+//function dss_elc_metrics_db_parse($records, $bundles, $domain_field, $sample_field, $metric = 'sum') {
+function dss_elc_metrics_db_parse($records, $sample_bundles, $sample_field, $domain_bundles, $domain_field, $metric = 'sum') {
+
+  $data = array();
+
+  foreach($samples as $sample) {
+
+    
+  }
+
+  // Case: Total number of items loaned by gender of human borrower
+  // For each item...
+  foreach($records as $node) {
+
+    // ...retrieve the x-axis value (e. g. "Male", "Female"...)
+    $sample = dss_elc_metrics_sample($node, $sample_field);
+
+    //! @todo Refactor
+    $group = 'Borrowers';
+
+    //print $node->nid . "\n";
+
+    $related_nodes = dss_elc_metrics_related_nodes($node, $sample_field, $group);
+
+    // ...retrieve the y-axis value (e. g. 0 items loaned, 1 item loaned...)
+    //$domain = dss_elc_metrics_domain($domain_bundles, $domain_field);
+
+    // Calculate the y-axis value
+    foreach($related_nodes as $sample => $related_node) {
+
+      // Initialize the new domain if it does not exist
+      if(!array_key_exists($domain, $data)) {
+
+	$data[$domain] = array();
+      }
+
+      // Perform the operation for the sample
+      if($metric == 'amean') {
+
+	//! @todo Implement
+      } else { // For simple summation and all other cases
+
+	if(!array_key_exists($sample, $data[$domain])) {
+
+	  $data[$domain] = array($sample => 1);
+	} else {
+
+	  $data[$domain][$sample]++;
+	}
+      }
+    }
+  }
+
+  // For NVD3 multi-bar chart
+  /*
+  array(array('key' => 'sample1',
+	      'values' => array( array('x' => 0,
+				       'y' => 123)  )),
+	array('key' => 'sample2',
+	      'values' => array()),
+	      )
+	)
+  */
+    
+  /**
+   * For loans, these can be analyzed in relation to the following:
+   * - Shareholder Attributes
+   *   - Name
+   *   - Gender
+   * - Representative Attributes
+   *   - Name
+   *   - Gender
+   * - Checkout Date of the Loan
+   * - Item Attributes
+   *   - Title
+   *   - Subject
+   *   - Type
+   *   - Author Attributes
+   *     - Name
+   *     - Gender
+   */
+  if(in_array('loan', $bundles)) {
+
+  } elseif(in_array('item', $bundles)) {
+
+  } elseif(in_array('human', $bundles)) {
+
+  }
+
+  foreach($records as $record) {
+
+    //print_r($record);    
+  }
+
+  if(true) {
+
+    return;
+  }
+
+  if(in_array('loan', $bundles)) {
+
+    //response
+    foreach($records as $record) {
+
+      $_object = node_load($record->field_bib_rel_object_target_id);
+
+      // If this is a manifestation, retrieve the original work
+      if($_object->type == 'manifestation') {
+
+	$entity_query = new EntityFieldQuery();
+	$entity_query->entityCondition('entity_type', 'node');
+	$entity_query->fieldCondition('field_item_embodies', 'target_id', $_object->nid, '=');
+	$entities = $entity_query->execute();
+
+	$_object = node_load(array_pop(array_keys($entities['node'])));
+      }
+
+      // Refactor
+      if($field_u != 'field_loan_duration') {
+
+	$_field_u = $_object->$field_u;
+      }
+
+      $_subject = node_load($record->field_bib_rel_subject_target_id);
+
+      /**
+       * @note Handling for List fields
+       * Book/Periodical/Item: field_item_format
+       * Human: field_human_gender
+       *
+       */
+      $_field_v = $_subject->$field_v;
+      
+      // Refactor
+      if(empty($_subject->$field_v)) {
+	
+	$_sample_name = 'Unknown';
+      } else {
+      
+	if($field_v == 'field_human_gender') {
+	  
+	  $_field = field_info_field($field_v);
+	  $_values = list_allowed_values($_field);
+	  $_sample_name = array_pop($_field_v['und']);
+	  $_sample_name = $_values[$_sample_name['value']];
+	} elseif($field_v == 'field_person_location' ||
+		 $field_v == 'field_person_membership') {
+	
+	  $entity_id = array_pop($_field_v['und']);
+	  $entity = node_load($entity_id['target_id']);
+	
+	  $_sample_name = $entity->title;
+	}
+      }
+      
+      // For NULL List field values
+      if(!$_sample_name) {
+	
+	$_sample_name = 'Unknown';
+      }
+      
+      // Term Reference fields
+      // Refactor for array
+      if($field_u == 'field_human_occupation' ||
+	 $field_u == 'field_person_type' ||
+	 $field_u == 'field_item_subject' ||
+	 $field_u == 'field_artifact_type') {
+      
+      // For the handling of NULL values
+      if(!$_field_u) {
+	
+	$_field_u = array('und' => array('Unknown'));
+      }
+      
+      foreach($_field_u['und'] as $term) {
+	  
+	if(!array_key_exists('tid', $term)) {
+	  
+	  $domain = 'Unknown';
+	} else {
+
+	  $term = taxonomy_term_load($term['tid']);
+	  $domain = $term->name;
+	}
+
+	if(!array_key_exists($domain, $json_record_values)) {
+
+	  $json_record_values[$domain] = array($_sample_name => 1);	  
+	} else {
+	  
+	  $json_record_values[$domain][$_sample_name]++;
+	}
+      }
+    } elseif($field_u == 'field_artifact_was_authored_by') { // Entity References
+      
+      $entity_id = array_pop($_field_u['und']);
+      $entity = node_load($entity_id['target_id']);
+      
+      $domain = $entity->field_person_name['und'][0]['value'];
+      
+      // Refactor
+      if(!array_key_exists($domain, $json_record_values)) {
+	
+	$json_record_values[$domain] = array($_sample_name => 1);
+      } else {
+	
+	$json_record_values[$domain][$_sample_name]++;
+      }
+    } elseif($field_u == 'field_item_format') { // Refactor
+
+      $_field = field_info_field($field_u);
+      $_values = list_allowed_values($_field);
+      $_domain = array_pop($_field_u['und']);
+      $domain = $_values[$_domain['value']];
+
+      // For NULL values
+      if(!$domain) {
+
+	$domain = 'Unknown';
+      }
+
+      // Refactor
+      if(!array_key_exists($domain, $json_record_values)) {
+	
+	$json_record_values[$domain] = array($_sample_name => 1);
+      } else {
+	
+	$json_record_values[$domain][$_sample_name]++;
+      }
+    } elseif($field_u == 'field_loan_duration') { // Loan duration
+
+      // Parse from a UNIX timestamp
+      $domain = $record->field_loan_duration_value;
+      $date = new DateObject($domain);
+      $domain = $date->format('Ymd');
+
+      // Refactor
+      if(!array_key_exists($domain, $json_record_values)) {
+	
+	$json_record_values[$domain] = array($_sample_name => 1);
+      } else {
+	
+	$json_record_values[$domain][$_sample_name]++;
+      }
+
+      // Also, set the type of scale to "temporal"
+      $scale_type = 'temporal';
+    }
+    }
+  }
+}
+
+function dss_elc_metrics_db_query($bundles) {
+
+  // Retrieve all bundles from the ELC database sorted by the values for the field
+  $query = db_select('node', 'n');
+  $result = array();
+  $query = new EntityFieldQuery();
+
+  if(in_array('loan', $bundles)) {
+  //if(true) {
+  //if(false) {
+
+    /**
+     * For loans, these can be analyzed in relation to the following:
+     * - Shareholder Attributes
+     *   - Name
+     *   - Gender
+     * - Representative Attributes
+     *   - Name
+     *   - Gender
+     * - Checkout Date of the Loan
+     * - Item Attributes
+     *   - Title
+     *   - Subject
+     *   - Type
+     *   - Author Attributes
+     *     - Name
+     *     - Gender
+     */
+    /*
+    $query->condition('n.type', 'loan', '=');
+    $query->join("field_data_field_bib_rel_subject", 'bib_rel_subject', 'bib_rel_subject.entity_id=n.nid'); // JOIN on all Representative NID's
+    $query->join("field_data_field_loan_shareholder", 'shareholder', 'shareholder.entity_id=n.nid'); // JOIN on all Shareholder NID's
+    $query->join("field_data_field_loan_duration", 'loan_duration', 'loan_duration.entity_id=n.nid'); // JOIN on the duration of the loan
+    $query->join("field_data_field_bib_rel_object", 'bib_rel_object', 'bib_rel_subject.entity_id=n.nid'); // JOIN on all Item/Book/Periodical NID's
+
+    $query->fields('n');
+
+    $query->fields('bib_rel_subject', array('field_bib_rel_subject_target_id'));
+    $query->fields('shareholder', array('field_loan_shareholder_target_id'));
+    $query->fields('loan_duration', array('field_loan_duration_value', 'field_loan_duration_value2'));
+    $query->fields('bib_rel_object', array('field_bib_rel_object_target_id'));
+    */
+
+
+    $query->entityCondition('entity_type', 'node')
+      ->entityCondition('bundle', 'loan')
+      ->propertyCondition('status', NODE_PUBLISHED)
+      ->fieldOrderBy('field_loan_duration', 'value', 'ASC')
+      //->addMetaData('account', user_load(1)); // Run the query as user 1.
+      ->range(0, 500);
+
+    $result = $query->execute();
+  } elseif(in_array('item', $bundles)) {
+    //} elseif(true) {
+
+    /**
+     * For items, these can be analyzed in relation to the following:
+     * - Title
+     * - Subject
+     * - Type
+     * - Manifestation
+     * - Author Attributes
+     *   - Name
+     *   - Gender
+     * - Loan Attributes
+     *   - Shareholder Attributes
+     *     - Name
+     *     - Gender
+     *   - Representative Attributes
+     *     - Name
+     *     - Gender
+     *   - Checkout Date of the Loan     
+     */
+
+    /*
+    $query->condition('n.type', 'item', '=');
+
+    $query->join("field_data_field_artifact_title", 'artifact_title', 'artifact_title.entity_id=n.nid'); // JOIN on the title of the item
+
+    $query->join("field_data_field_item_embodies", 'item_embodies', 'item_embodies.entity_id=n.nid'); // JOIN on all manifestation NID's
+    $query->join("field_data_field_artifact_was_authored_by", 'artifact_was_authored_by', 'artifact_was_authored_by.entity_id=n.nid'); // JOIN on all authors NID's
+    
+    $query->fields('n');
+
+    $query->fields('artifact_title', array('field_artifact_title_value'));
+    $query->fields('item_embodies', array('field_item_embodies_target_id'));
+    $query->fields('artifact_was_authored_by', array('field_artifact_was_authored_by_target_id'));
+    */
+
+    $query->entityCondition('entity_type', 'node')
+      ->entityCondition('bundle', array('item', 'book', 'periodical'), 'IN')
+      ->propertyCondition('status', NODE_PUBLISHED)
+      //->addMetaData('account', user_load(1)); // Run the query as user 1.
+      ->range(0, 500);
+      //->range(0, 10);
+
+    $result = $query->execute();
+  } elseif(in_array('human', $bundles)) {
+
+    $query->entityCondition('entity_type', 'node')
+      ->entityCondition('bundle', 'human')
+      ->propertyCondition('status', NODE_PUBLISHED)
+      //->addMetaData('account', user_load(1)); // Run the query as user 1.
+      //->range(0, 500);
+      ->range(0, 10);
+
+    $result = $query->execute();
+  }
+
+  /**
+   * For performance reasons, single queries should be limited to 500
+   */
+
+  /*
+  print_r($query);
+  $result = $query->execute();
+  print_r($result->fetchAssoc());
+
+  return $result;
+  */
+
+  $nodes = array();
+  if(isset($result['node'])) {
+    
+    $nids = array_keys($result['node']);
+    $nodes = entity_load('node', $nids);
+  }
+
+  return $nodes;
+}
+
+/**
+ * Retrieve the total number of records for each field
+ * @todo Abstract the metrics for each axis (e. g. total number of items against average number of loans)
+ *
+ */
+function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $field_v) {
+
+  $bundles_u = $bundle_u == 'item' ? array('item','book','periodical') : array($bundle_u);
+  $bundles_v = $bundle_v == 'item' ? array('item','book','periodical') : array($bundle_v);
+
+  $bundle = $bundle_u;
+  $bundles = $bundles_u;
+
+  $data = array();
+
+  $domain = $field;
+
+  //$query = array();
+
+  // Anomalous cases
+  //! @todo To be implemented
+  if($field_u == 'related_loans_duration_elapsed') {
+
+    //! @todo To be implemented
+  } elseif($field_u == 'quantity') {
+
+    /*
+    // Get the total number of the sample for the domain
+    // e. g. Total number of loans (value) for Shareholder name NP (sample_name) within the domain "Shareholders"
+
+    // Query Solr and retrieve the faceted values for the field
+    if($sample == 'Unknown') {
+
+      $query = array('-' . $field_v . ':[* TO *]');
+    } else {
+
+      $query = array($field_v . ':' . $sample);
+    }
+
+    //$query = array();
+    if($bundle == 'human') {
+
+      $query[] = '(field_person_type:Shareholder OR field_person_type:Representative)';
+    }
+
+    $rows = 1000000;
+    //$facets = array('facet.field' => $field);
+
+    //list($query, $results) = dss_elc_metrics_solr_query($bundles, $query, $rows, TRUE, $facets);
+    list($query, $results) = dss_elc_metrics_solr_query($bundles, $query, $rows);
+    print_r($query);
+    //print_r($results);
+    
+    $data[$domain] = array($sample => $value);
+    */
+
+    /*
+    $nodes = dss_elc_metrics_db_query($bundles, $field, $sample, $field_v);
+    dss_elc_metrics_db_parse($nodes, $bundles, $field, $sample, $field_v);
+    */
+
+    $nodes = dss_elc_metrics_db_query($bundles, $field_u, $field_v);
+    dss_elc_metrics_db_parse($nodes, $bundles, $field_u, $field_v);
+  } else {
+
+    /*
+    $nodes = dss_elc_metrics_db_query($bundles_v, $field_u, $field_v);
+    // function dss_elc_metrics_db_parse($records, $sample_bundles, $sample_field, $domain_bundles, $domain_field, $metric = 'sum') {
+    dss_elc_metrics_db_parse($nodes, $bundles_u, $field_u, $bundles_v, $field_v);
+    */
+
+    // Query Solr and retrieve the faceted values for the field
+    //$query = array('+' . $field . ':[* TO *]');
+    $query = array();
+    $data = array();
+
+    $field_solr_map = array('field_artifact_was_authored_by' => 'sm_field_artifact_was_authored_b',
+			    'field_item_subject' => 'sm_vid_Item_Subjects',
+			    'field_item_format' => 'bundle_name',
+
+			    'field_human_gender' => 'bs_field_gender',
+			    'field_person_type' => 'sm_vid_Person_Types'
+			    );
+
+    $entity_reference_fields = array('sm_field_artifact_was_authored_b' => array('human'));
+
+    $solr_field_sample_label_map = array('sm_field_artifact_was_authored_b' => 'Author',
+					 'sm_vid_Item_Subjects' => 'Subject',
+					 'bundle_name' => 'Type',
+
+					 'bs_field_gender' => 'Gender',
+					 'sm_vid_Person_Types' => 'Type');
+
+    $field_u = $field_solr_map[$field_u];
+    $field_v = $field_solr_map[$field_v];
+
+    if($bundle_v == 'human') {
+
+      $query[] = '(sm_vid_Person_Types:Shareholder OR sm_vid_Person_Types:Representative)';
+    }
+
+    $rows = 1000000;
+
+    //$facets = array('facet.field' => $field);
+    list($query, $results) = dss_elc_metrics_solr_query($bundles_v, $query, $rows);
+
+    //print_r($results->response->docs);
+    $docs = $results->response->docs;
+
+    //[ss_field_loan_shareholder_label] => Michler, Nathaniel
+    //[ss_field_bib_rel_subject_label] => Porter, James M.
+
+    $data = array();
+    $query = array();
+      
+    // Iterate through all loans
+    //list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 1000000);
+    list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 100);
+
+    $loans = $results->response->docs;
+    $samples = array();
+
+    foreach($loans as $loan_doc) {
+
+      $domain = '';
+      $data;
+
+      if(true) {
+
+	// This should be iterative for multiple volumes borrowed during a single loan
+	$manifest_nid = $loan_doc->sm_field_bib_rel_object;
+
+	/*
+	preg_match('/node\:(\d+)/', $manifest_nid[0], $m);
+	$manifest_nid = intval($m[1]);
+
+	$query = array();
+	$query[] = 'entity_id:' . $manifest_nid;
+
+	list($query, $results) = dss_elc_metrics_solr_query(array('manifestation'), $query, 1000000);
+
+	//print_r($results->response->docs);
+	$manifest_doc = $results->response->docs[0];
+
+	$item_nid = $manifest_doc->sm_field_item_embodies;
+	*/
+
+	/*
+	preg_match('/node\:(\d+)/', $item_nid[0], $m);
+	$item_nid = intval($m[1]);
+
+	$query = array();
+	$query[] = 'entity_id:' . $item_nid;
+	*/
+
+	$query = array();
+	$query[] = 'sm_field_item_embodies:"' . $manifest_nid[0] . '"';
+
+	list($query, $results) = dss_elc_metrics_solr_query($bundles_v, $query, 1000000);
+
+	$item_doc = $results->response->docs[0];
+
+	//! @todo Refactor
+	//$field_v = 'sm_vid_Item_Subjects';
+	$v = $item_doc->$field_v;
+	$v = $v[0];
+
+	if(empty($v)) {
+
+	  $v = 'Unknown';
+	} elseif(array_key_exists($field_v, $entity_reference_fields)) {
+
+	  preg_match('/node\:(\d+)/', $v, $m);
+	  $rel_nid = intval($m[1]);
+
+	  // Retrieve the label for entity reference fields
+	  $query = array();
+	  $query[] = 'entity_id:' . $rel_nid;
+
+	  $rel_bundles = $entity_reference_fields[$field_v];
+
+	  list($query, $results) = dss_elc_metrics_solr_query($rel_bundles, $query, 1000000);
+	  $rel_docs = $results->response->docs;
+	  if(empty($rel_docs)) {
+
+	    $v = 'Unknown';
+	  } else {
+
+	    $v = $rel_docs[0]->label;
+	  }
+	}
+      }
+
+      /*
+      $humans = array('Shareholder',
+		      'Representative');
+      */
+
+      if(true) {
+
+	$groups = dss_elc_metrics_samples($bundle_u, $field_u);
+
+	/*
+	foreach(array('sm_field_bib_rel_object' => 'Shareholder',
+		      'sm_field_loan_shareholder' => 'Representative') as $human_reference_field => $label) {
+	*/
+	foreach($groups as $human_reference_field => $quantity) {
+
+	  //$label = $solr_field_sample_label_map[$field_u];
+	  $label = $human_reference_field;
+
+	  /*
+	  $human_nid = '';
+	  $human_nid = $loan_doc->$human_reference_field;
+	  preg_match('/node\:(\d+)/', $human_nid[0], $m);
+	  */
+
+	  if(!array_key_exists($label, $samples)) {
+
+	    $samples[$label] = array();
+	  }
+
+	  if(!array_key_exists($v, $samples[$label])) {
+
+	    $samples[$label][$v] = 1;
+	  } else {
+
+	    $samples[$label][$v]++;
+	  }
+
+	  /*
+	    $data = array('key' => $label,
+	    'samples' => array());
+	  */
+	}
+      }
+    }
+
+    foreach($samples as $group => $value) {
+
+      $values = array();
+      foreach($value as $x => $y) {
+
+	$values[] = array('x' => $x,
+			  'y' => $y);
+      }
+
+      $data[] = array('key' => $group,
+		      'values' => $values);
+    }
+
+    if(true) {
+
+      return $data;
+    }
+
+    // For each item...
+    foreach($docs as $doc) {
+
+      $query = array();
+      //$query[] = 'sm_field_bib_rel_object:"node:' . $doc->entity_id . '"';
+      
+      // For each doc, retrieve the loan
+      list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 1000000);
+
+      $loans = $results->response->docs;
+      foreach($loans as $loan_doc) {
+
+	print_r($loan_doc);
+	exit(1);
+
+	$domain = '';
+	$data;
+
+	if(true) {
+
+	  $manifest_nid = $loan_doc->sm_field_bib_rel_object;
+	  preg_match('/node\:(\d+)/', $manifest_nid[0], $m);
+
+	  $manifest_nid = intval($m[1]);
+
+	  $query = array();
+	  $query[] = 'entity_id:' . $manifest_nid;
+
+	  list($query, $results) = dss_elc_metrics_solr_query(array('manifestation'), $query, 1000000);
+
+	  $manifest_doc = $results->response->docs[0];
+	  $item_nid = $manifest_doc->sm_field_item_embodies;
+	  preg_match('/node\:(\d+)/', $item_nid[0], $m);
+
+	  $item_nid = intval($m[1]);
+
+	  $query = array();
+	  $query[] = 'entity_id:' . $item_nid;
+
+	  list($query, $results) = dss_elc_metrics_solr_query($bundles_v, $query, 1000000);
+	  $item_doc = $results->response->docs[0];
+
+	  print_r($item_doc);
+
+	  //$data[];
+	}
+
+	exit(1);
+      }
+    }
+
+    exit(1);
+    $num_found = $results->response->numFound;
+
+    // Attempt to retrieve information pertaining to the field
+    $info = field_info_instance('node', $field_u, $bundle);
+  }
+
+  return $data;
+}
+
+function dss_elc_metrics_solr_parse() {
+
+  
+}
+
+function dss_elc_metrics_samples($bundle, $field) {
+
+  $bundles = $bundle == 'item' ? array('item','book','periodical') : array($bundle);
+
+  $entity_reference_fields = array('field_person_location',
+				   );
+
+  $samples = array('Unknown' => 0);
+  $num_faceted = 0;
+
+  if($field == 'related_manifestation_title') {
+
+    //! @todo To be implemented
+  } else {
+
+    // Query Solr and retrieve the faceted values for the field
+    //$query = array('+' . $field . ':[* TO *]');
+    $query = array();
+    if($bundle == 'human') {
+
+      $query[] = '(sm_vid_Person_Types:Shareholder OR sm_vid_Person_Types:Representative)';
+    }
+
+    $rows = 1000000;
+    $facets = array('facet.field' => $field);
+
+    list($query, $results) = dss_elc_metrics_solr_query($bundles, $query, $rows, TRUE, $facets);
+
+    $num_found = $results->response->numFound;
+    foreach($results->facet_counts->facet_fields as $key => $facet_field) {
+      
+      $facet_field_value = (array) $facet_field;
+      
+      if(!empty($facet_field_value)) {
+
+	foreach($facet_field as $sample => $quantity) {
+
+	  // For entity reference fields...
+	  if(in_array($field, $entity_reference_fields)) {
+	    
+	    preg_match('/node\:(\d+)/', $sample, $m);
+	    $nid = $m[1];
+	    $node = node_load($nid);
+
+	    $sample = $node->title;
+	  }
+	
+	  $samples[] = $sample;
+	  $num_faceted += $quantity;
+	}
+      }
+    }
+  }
+
+  $samples['Unknown'] = $num_found - $num_faceted;
+
+  return $samples;
+}
 
 /**
  * @author griffinj
  * Retrieve the data for the bivariate relationships
  *
  */
-function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $metric) {
-
-  /*
-    { "ordinal": {
-    "domain": ["subjectA","subjectB","subjectC"],
-    "range": {
-    "male": [45,67,78],
-    "female":[54,76,87]
-    }}}
-  */
-
-  /*
-			    data : [
-			{ domain: 'subjectA', values: [ { sample: 'sampleA', value: 45 }, { sample: 'sampleB', value: 54 } ] },
-			{ domain: 'subjectB', values: [ { sample: 'sampleA', value: 67 }, { sample: 'sampleB', value: 76 } ] },
-			{ domain: 'subjectC', values: [ { sample: 'sampleA', value: 88 }, { sample: 'sampleB', value: 78 } ] } ],
-   */
+function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $metric_u = 'sum', $metric_v = 'sum') {
 
   /**
    * @todo Integrate MongoDB caching
@@ -1478,6 +2458,7 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $m
        * @todo Integrate with a remote service call to the QAS
        *
        */
+      /*
       $metrics[$sample] = array('sample' => $sample,
 				'aMean' => mt_rand() / mt_getrandmax(),
 				'median' => '{ ' . (string) (mt_rand() / mt_getrandmax()) . ' }',
@@ -1485,6 +2466,7 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $m
 				'kurtosisPearson' => mt_rand() / mt_getrandmax(),
 				'kurtosisFisher' => mt_rand() / mt_getrandmax(),
 				'distribution' => 'Poisson');
+      */
     }
 
     // Refactor
@@ -1500,6 +2482,72 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $m
     }
   }
 
+  /**
+   * Generate the labels
+   *
+   */
+  //! @todo Refactor and abstract
+  $field_label_map = array('related_manifestation_title' => 'Item Collection Title',
+			   'related_loans_duration_elapsed' => 'Time Elapsed Between Loans');
+  $field_type_map = array('related_manifestation_title' => 'nominal',
+			  'related_loans_duration_elapsed' => 'ratio');
+
+  $x_axis_label = array_key_exists($field_u, $field_label_map) ? $field_label_map[$field_u] : 'Sample';
+  $x_axis_type = array_key_exists($field_u, $field_type_map) ? $field_type_map[$field_u] : 'nominal';
+
+  $x_axis = array('label' => $x_axis_label,
+		  'type' => $x_axis_type,
+		  'axis' => 'x');
+
+  $y_axis_label = array_key_exists($field_v, $field_label_map) ? $field_label_map[$field_v] : 'Quantity';
+  $y_axis_type = array_key_exists($field_v, $field_type_map) ? $field_type_map[$field_v] : 'ratio';
+
+  $y_axis = array('label' => $y_axis_label,
+		  'type' => $y_axis_type,
+		  'axis' => 'y');
+
+  /*
+   * Retrieve the data
+   *
+   */
+  $data = array();
+
+  //
+
+  /*
+  foreach(array($metric_u => array($bundle_u, $field_u),
+		$metric_v => array($bundle_v, $field_v)) as $metric => $parameters) {
+  */
+  $samples = dss_elc_metrics_samples($bundle_u, $field_u);
+
+  switch($metric) {
+      
+  case 'sum':
+  default:
+
+    $data = array_merge($data, dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $field_v));
+  }
+
+  /*
+  foreach(dss_elc_metrics_samples($bundle_u, $field_u) as $sample => $quantity) {
+
+    switch($metric) {
+      
+    case 'sum':
+    default:
+
+      //$json_record_values = array_merge($json_record_values, call_user_func_array('dss_elc_metrics_bivariate_summation', $parameters));
+      $json_record_values = array_merge($json_record_values, dss_elc_metrics_bivariate_summation($bundle_v, $field_v, $sample, $field_u));
+    }
+  }
+  */
+
+  if(true) {
+
+    return $data;
+  }
+
+  /*
   // Refactor
   // Label mapping
   $info_u = field_info_instance('node', $field_u, $field_u == 'field_loan_duration' ? 'loan' : 'item');
@@ -1514,6 +2562,7 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $m
 
     $y_axis['property'] = 'value';
   }
+  */
 
   // Wrap the Object with the appropriate metadata
   /*
@@ -2217,7 +3266,7 @@ function dss_elc_metrics_get_bivariate_ajax() {
   }
 
   if(!empty($data)) {
-
+    
     // The JSON must be normalized
     if(array_keys($data) === array('bundle_u', 'field_u', 'bundle_v', 'field_v', 'metric')) {
 
@@ -3156,148 +4205,7 @@ function dss_elc_metrics_datatables_response($response, $bundles) {
   return $datatable_json;
 }
 
-/**
- * Query using the DataTables GET request
- * @author griffinj@lafayette.edu
- *
- */
-function dss_elc_metrics_datatables_query($bundles, $request, $filter_query = NULL) {
 
-  // Simple search query (not fully tested)
-  // class_exists('Apache_Solr_Service') ?: spl_autoload_register('_search_api_solr_autoload'); // make sure that SolrPhpClient class is loaded (use only for <=rc3)
-  $url = variable_get('apachesolr_host', 'localhost');
-
-  $solr = new DrupalApacheSolrService('http://santorini0.stage.lafayette.edu:8080/solr' . '/' . 'elc');
-  $solr_field_map = array('loan' => array('ss_field_loan_shareholder_label',
-					  'ss_field_bib_rel_subject_label',
-					  'is_field_loan_duration_value',
-					  'ss_field_bib_rel_object_label',
-					  'is_field_loan_volumes_loaned_first',
-					  'is_changed'),
-			  'item' => array('ss_field_artifact_was_authored_by_label',
-					  'label',
-					  'is_field_item_volume_migrate',
-					  'ss_field_artifact_type_constant',
-					  'ss_field_item_subject',
-					  'is_changed'),
-			  'human' => array('label',
-					   'is_changed')
-			  );
-
-  // Handling for single or multiple bundles
-  $first_bundle = $bundles[0];
-
-  $bundle_query = array_map(function($bundle) {
-
-      return 'bundle:' . $bundle;
-    }, $bundles);
-
-  if(count($bundle_query) == 1) {
-
-    $bundle_query = $bundle_query[0];
-  } else {
-
-    $bundle_query = '(' . implode(' OR ', $bundle_query) . ')';
-  }
-  
-  $query = array();
-
-  foreach($request['columns'] as $i => $search) {
-
-    if(trim($search['search']['value']) != '' ) {
-	    
-      $query[] = $solr_field_map[$first_bundle][$i] . ':' . trim($search['search']['value']) . '*';
-    }
-  }
-
-  // For aggregating and storing the total number of records
-  $is_unfiltered_query = empty($query);
-
-  $query_string = $bundle_query;
-
-  if(!empty($query) ) {
-
-    $query_string .= ' AND ';
-  }
-  $query_string .= implode(' AND ', $query);
-
-  // Retrieve the name of the Solr field
-  $solr_field = $solr_field_map[$first_bundle][intval($request['order']['0']['column'])];
-
-  // If this is a "label" field or a single string field type...
-  if($solr_field == 'ss_field_artifact_type_constant') {
-
-    $sort = 'bundle' . ' ' . $request['order']['0']['dir'];
-
-  } elseif($solr_field == 'label') {
-
-    $sort = 'sort_' . $solr_field . ' ' . $request['order']['0']['dir'];
-
-  } elseif(preg_match('/^ss_(.+)/', $solr_field, $m)) {
-
-    // ...then apachesolr's default copyField should be used
-    $sort = 'sort_' . $m[1] . ' ' . $request['order']['0']['dir'];
-
-  } else {
-
-    // Otherwise, simply attempt to sort on the field name
-    $sort = $solr_field . ' ' . $request['order']['0']['dir'];
-  }
-
-  $params = array('q' => $query_string,
-		  //'rows' => 100000,
-		  //'rows' => ($request['length'] / 5),
-		  'rows' => $request['length'],
-
-		  //'start' => $request['start'],
-		  'sort' => $sort
-		  );
-
-  // Handling for related nodes
-  if(!is_null($filter_query)) {
-
-    $params['fq'] = $filter_query;
-  }
-
-  // This is the object that knows about the query coming from the user.
-  $query_name = implode('_', array('views_datatables', $first_bundle, $query_string, $sort));
-  $query_name = preg_replace('/s/', '_', $query_name);
-  
-  $query = apachesolr_drupal_query($query_name, $params, $sort, '', $solr);
-
-  /*
-  if ($query->getParam('q')) {
-
-    apachesolr_search_add_spellcheck_params($query);
-  }
-  */
-  $query->page = $request['start'] / ($request['length'] / 5);
-
-  list($query, $solr_response) = apachesolr_do_query($query);
-
-  //print_r($query);
-  //print_r($solr_response->response->docs[0]);
-  //exit(1);
-
-  if($is_unfiltered_query) {
-
-    $total_records = variable_set('dss_elc_metrics_views_datatables_' . $first_bundle . '_total_records', $solr_response->response->numFound);
-  }
-
-  return array($query, $solr_response);
-}
-
-function dss_elc_metrics_apachesolr_query_alter(&$query) {
-
-  if(!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
-
-    // Required to override the paging functionality
-    //$query->page = $request['start'] / ($request['length'] / 5);
-    $query->page = $request['start'] / $request['length'];
-    //$query->addParam('rows', 1000000);
-  }
-
-}
 
 function dss_elc_metrics_views_datatables_mongo_key($prefix, $view, $sort_value, $sort_dir, $start, $rows, $nid = NULL) {
 
