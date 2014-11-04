@@ -2194,7 +2194,11 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 	//! @todo Refactor
 	//$field_v = 'sm_vid_Item_Subjects';
 	$v = $item_doc->$field_v;
-	$v = $v[0];
+
+	if(is_array($v)) {
+
+	  $v = $v[0];
+	}
 
 	if(empty($v)) {
 
