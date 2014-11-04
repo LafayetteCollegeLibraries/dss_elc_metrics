@@ -2357,6 +2357,8 @@ function dss_elc_metrics_samples($bundle, $field) {
 
   $entity_reference_fields = array('field_person_location',
 				   );
+  //$tid_fields = array('field_person_type');
+  $solr_facet_field_map = array('field_person_type' => 'sm_vid_Person_Types');
 
   $samples = array('Unknown' => 0);
   $num_faceted = 0;
@@ -2375,7 +2377,16 @@ function dss_elc_metrics_samples($bundle, $field) {
     }
 
     $rows = 1000000;
-    $facets = array('facet.field' => $field);
+
+    if(array_key_exists($field, $solr_facet_field_map)) {
+
+      $facet_field = $solr_facet_field_map[$field];
+    } else {
+
+      $facet_field = $field;
+    }
+
+    $facets = array('facet.field' => $facet_field);
 
     list($query, $results) = dss_elc_metrics_solr_query($bundles, $query, $rows, TRUE, $facets);
 
@@ -2397,15 +2408,22 @@ function dss_elc_metrics_samples($bundle, $field) {
 
 	    $sample = $node->title;
 	  }
-	
-	  $samples[] = $sample;
+
+	  $samples[$sample] = $quantity;
 	  $num_faceted += $quantity;
 	}
+      } else {
+
+	$samples['Unknown']++;
       }
     }
   }
 
-  $samples['Unknown'] = $num_found - $num_faceted;
+  // Needs to be extended for one-to-many relationships
+  if($samples['Unknown'] == 0 and $num_faceted < $num_found) {
+
+    $samples['Unknown'] = $num_found - $num_faceted;
+  }
 
   return $samples;
 }
@@ -2518,7 +2536,7 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $m
   foreach(array($metric_u => array($bundle_u, $field_u),
 		$metric_v => array($bundle_v, $field_v)) as $metric => $parameters) {
   */
-  $samples = dss_elc_metrics_samples($bundle_u, $field_u);
+  //$samples = dss_elc_metrics_samples($bundle_u, $field_u);
 
   switch($metric) {
       
