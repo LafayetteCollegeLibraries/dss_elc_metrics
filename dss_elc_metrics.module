@@ -2115,6 +2115,7 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 			    'field_bib_rel_subject' => 'sm_field_bib_rel_subject',
 			    'field_loan_shareholder' => 'sm_field_loan_shareholder',
 			    'field_bib_rel_object' => 'sm_field_bib_rel_object',
+			    'field_loan_duration_value_0' => 'is_field_loan_duration_value'
 			    );
 
     $entity_reference_fields = array('sm_field_artifact_was_authored_b' => array('human'),
@@ -2194,6 +2195,10 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 
 	  $item_doc = $results->response->docs[0];
 	  */
+
+	  ////
+
+	  /*
 	  $item_field = $field_v;
 
 	  //$field_v = 'sm_vid_Item_Subjects';
@@ -2228,6 +2233,39 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 	      $domain = $rel_docs[0]->label;
 	    }
 	  }
+	  */
+	  $domain = is_array($item_doc->$field_v) ? $item_doc->$field_v : array($item_doc->$field_v);
+
+	  if(empty($domain) or empty($domain[0])) {
+
+	    $domains[] = 'Unknown';
+	  } elseif(array_key_exists($field_v, $entity_reference_fields)) {
+
+	    preg_match('/node\:(\d+)/', $domain[0], $m);
+	    $rel_nid = intval($m[1]);
+
+	    // Retrieve the label for entity reference fields
+	    $query = array();
+	    $query[] = 'entity_id:' . $rel_nid;
+
+	    $rel_bundles = $entity_reference_fields[$field_v];
+
+	    list($query, $results) = dss_elc_metrics_solr_query($rel_bundles, $query, 1000000);
+
+	    $rel_docs = $results->response->docs;
+
+	    if(empty($rel_docs)) {
+
+	      $domains[] = 'Unknown';
+	    } else {
+
+	      $domains[] = $rel_docs[0]->label;
+	    }
+	  } else {
+
+	    $domains[] = $domain[0];
+	  }
+
 	} elseif($bundle_v == 'human') {
 
 	  foreach(array('sm_field_bib_rel_subject',
@@ -2304,10 +2342,12 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 	    }
 	  } else {
 
-	    $domains[] = $domain;
+	    $domains[] = $domain[0];
 	  }
-	}	
+	}
       }
+
+      //print_r($domains);
       
       /**
        * Generate the data for the (grouped) samples and link these points to the output
