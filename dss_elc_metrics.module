@@ -2044,7 +2044,7 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 
   $data = array();
 
-  $domain = $field;
+  //$domain = $field;
 
   //$query = array();
 
@@ -2125,25 +2125,9 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
     $field_u = $field_solr_map[$field_u];
     $field_v = $field_solr_map[$field_v];
 
-    if($bundle_v == 'human') {
-
-      $query[] = '(sm_vid_Person_Types:Shareholder OR sm_vid_Person_Types:Representative)';
-    }
-
-    $rows = 1000000;
-
-    //$facets = array('facet.field' => $field);
-    list($query, $results) = dss_elc_metrics_solr_query($bundles_v, $query, $rows);
-
-    //print_r($results->response->docs);
-    $docs = $results->response->docs;
-
-    //[ss_field_loan_shareholder_label] => Michler, Nathaniel
-    //[ss_field_bib_rel_subject_label] => Porter, James M.
-
     $data = array();
     $query = array();
-      
+
     // Iterate through all loans
     //list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 1000000);
     list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 100);
@@ -2157,9 +2141,6 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
       $data;
 
       if(true) {
-
-	// This should be iterative for multiple volumes borrowed during a single loan
-	$manifest_nid = $loan_doc->sm_field_bib_rel_object;
 
 	/*
 	preg_match('/node\:(\d+)/', $manifest_nid[0], $m);
@@ -2185,52 +2166,111 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 	*/
 
 	$query = array();
+
+	// This should be iterative for multiple volumes borrowed during a single loan
+	$manifest_nid = $loan_doc->sm_field_bib_rel_object;
 	$query[] = 'sm_field_item_embodies:"' . $manifest_nid[0] . '"';
-
-	list($query, $results) = dss_elc_metrics_solr_query($bundles_v, $query, 1000000);
-
+	//list($query, $results) = dss_elc_metrics_solr_query($bundles_v, $query, 1000000);
+	list($query, $results) = dss_elc_metrics_solr_query(array('item', 'book', 'periodical'), $query, 1000000);
 	$item_doc = $results->response->docs[0];
 
 	//! @todo Refactor
-	//$field_v = 'sm_vid_Item_Subjects';
-	$v = $item_doc->$field_v;
+	if($bundle_v == 'item') {
 
-	if(is_array($v)) {
+	  /*
+	  // This should be iterative for multiple volumes borrowed during a single loan
+	  $manifest_nid = $loan_doc->sm_field_bib_rel_object;
+	  $query[] = 'sm_field_item_embodies:"' . $manifest_nid[0] . '"';
+	  list($query, $results) = dss_elc_metrics_solr_query($bundles_v, $query, 1000000);
 
-	  $v = $v[0];
-	}
+	  $item_doc = $results->response->docs[0];
+	  */
+	  $item_field = $field_v;
 
-	if(empty($v)) {
+	  //$field_v = 'sm_vid_Item_Subjects';
+	  $domain = $item_doc->$item_field;
 
-	  $v = 'Unknown';
-	} elseif(array_key_exists($field_v, $entity_reference_fields)) {
+	  if(is_array($domain)) {
 
-	  preg_match('/node\:(\d+)/', $v, $m);
-	  $rel_nid = intval($m[1]);
+	    $domain = $domain[0];
+	  }
 
-	  // Retrieve the label for entity reference fields
-	  $query = array();
-	  $query[] = 'entity_id:' . $rel_nid;
+	  if(empty($domain)) {
 
-	  $rel_bundles = $entity_reference_fields[$field_v];
+	    $domain = 'Unknown';
+	  } elseif(array_key_exists($item_field, $entity_reference_fields)) {
 
-	  list($query, $results) = dss_elc_metrics_solr_query($rel_bundles, $query, 1000000);
-	  $rel_docs = $results->response->docs;
-	  if(empty($rel_docs)) {
+	    preg_match('/node\:(\d+)/', $domain, $m);
+	    $rel_nid = intval($m[1]);
 
-	    $v = 'Unknown';
-	  } else {
+	    // Retrieve the label for entity reference fields
+	    $query = array();
+	    $query[] = 'entity_id:' . $rel_nid;
 
-	    $v = $rel_docs[0]->label;
+	    $rel_bundles = $entity_reference_fields[$item_field];
+
+	    list($query, $results) = dss_elc_metrics_solr_query($rel_bundles, $query, 1000000);
+	    $rel_docs = $results->response->docs;
+	    if(empty($rel_docs)) {
+
+	      $domain = 'Unknown';
+	    } else {
+
+	      $domain = $rel_docs[0]->label;
+	    }
+	  }
+	} elseif($bundle_v == 'human') {
+
+	  foreach(array('sm_field_bib_rel_subject',
+			'sm_field_loan_shareholder') as $human_reference_field) {
+
+	    // This should be iterative for multiple volumes borrowed during a single loan
+	    $human_nid = $loan_doc->$human_reference_field;
+	    preg_match('/node\:(\d+)/', $human_nid[0], $m);
+	    $human_nid = intval($m[1]);
+
+	    $query = array();
+	    $query[] = 'entity_id:"' . $human_nid . '"';
+
+	    list($query, $results) = dss_elc_metrics_solr_query($bundles_v, $query, 1000000);
+
+	    $human_field = $field_v;
+	    $human_doc = $results->response->docs[0];
+
+	    $domains = is_array($human_doc->$human_field) ? $human_doc->$human_field : array($human_doc->$human_field);
+
+	    if(empty($domains) or empty($domains[0])) {
+
+	      $domains[0] = 'Unknown';
+	    } elseif(array_key_exists($human_field, $entity_reference_fields)) {
+
+	      preg_match('/node\:(\d+)/', $domains, $m);
+	      $rel_nid = intval($m[1]);
+
+	      // Retrieve the label for entity reference fields
+	      $query = array();
+	      $query[] = 'entity_id:' . $rel_nid;
+
+	      $rel_bundles = $entity_reference_fields[$human_field];
+
+	      list($query, $results) = dss_elc_metrics_solr_query($rel_bundles, $query, 1000000);
+	      $rel_docs = $results->response->docs;
+	      if(empty($rel_docs)) {
+
+		$domains[] = 'Unknown';
+	      } else {
+
+		$domains[] = $rel_docs[0]->label;
+	      }
+	    }
 	  }
 	}
       }
 
-      /*
-      $humans = array('Shareholder',
-		      'Representative');
-      */
-
+      /**
+       * Generate the data for the (grouped) samples and link these points to the output
+       *
+       */
       if(true) {
 
 	$groups = dss_elc_metrics_samples($bundle_u, $field_u);
@@ -2239,10 +2279,10 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 	foreach(array('sm_field_bib_rel_object' => 'Shareholder',
 		      'sm_field_loan_shareholder' => 'Representative') as $human_reference_field => $label) {
 	*/
-	foreach($groups as $human_reference_field => $quantity) {
+
+	foreach($groups as $label => $quantity) {
 
 	  //$label = $solr_field_sample_label_map[$field_u];
-	  $label = $human_reference_field;
 
 	  /*
 	  $human_nid = '';
@@ -2250,17 +2290,51 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 	  preg_match('/node\:(\d+)/', $human_nid[0], $m);
 	  */
 
-	  if(!array_key_exists($label, $samples)) {
+	  if($bundle_u == 'item') {
 
-	    $samples[$label] = array();
-	  }
+	    //print $field_u;
+	    //print_r( $item_doc);
+	    //print $item_doc->$field_u;
+	    //print $label . "\n";
+	    //exit(1);
 
-	  if(!array_key_exists($v, $samples[$label])) {
+	    if($item_doc->$field_u == $label or
+	       ($label == 'Unknown' and !array_key_exists($item_doc->$field_u, $groups))) {
 
-	    $samples[$label][$v] = 1;
+	      if(!array_key_exists($label, $samples)) {
+
+		$samples[$label] = array();
+	      }
+
+	      foreach($domains as $domain) {
+
+		if(!array_key_exists($domain, $samples[$label])) {
+
+		  $samples[$label][$domain] = 1;
+		} else {
+
+		  $samples[$label][$domain]++;
+		}
+	      }
+	    }
 	  } else {
 
-	    $samples[$label][$v]++;
+	    //! @todo Refactor
+	    if(!array_key_exists($label, $samples)) {
+
+	      $samples[$label] = array();
+	    }
+
+	    foreach($domains as $domain) {
+
+	      if(!array_key_exists($domain, $samples[$label])) {
+
+		$samples[$label][$domain] = 1;
+	      } else {
+
+		$samples[$label][$domain]++;
+	      }
+	    }
 	  }
 
 	  /*
@@ -2271,23 +2345,27 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
       }
     }
 
-    foreach($samples as $group => $value) {
-
-      $values = array();
-      foreach($value as $x => $y) {
-
-	$values[] = array('x' => $x,
-			  'y' => $y);
-      }
-
-      $data[] = array('key' => $group,
-		      'values' => $values);
-    }
-
     if(true) {
 
-      return $data;
+      return $samples;
     }
+
+    //! @todo Refactor
+
+    if($bundle_v == 'human') {
+
+      $query[] = '(sm_vid_Person_Types:Shareholder OR sm_vid_Person_Types:Representative)';
+    }
+
+    $rows = 1000000;
+
+    //$facets = array('facet.field' => $field);
+    list($query, $results) = dss_elc_metrics_solr_query($bundles_v, $query, $rows);
+
+    $docs = $results->response->docs;
+
+    print_r($docs[0]);
+    exit(1);
 
     // For each item...
     foreach($docs as $doc) {
@@ -2361,8 +2439,12 @@ function dss_elc_metrics_samples($bundle, $field) {
 
   $entity_reference_fields = array('field_person_location',
 				   );
+
   //$tid_fields = array('field_person_type');
   $solr_facet_field_map = array('field_person_type' => 'sm_vid_Person_Types');
+  $solr_facet_field_include = array('bundle_name' => array('Book',
+							   'Periodical',
+							   'Item'));
 
   $samples = array('Unknown' => 0);
   $num_faceted = 0;
@@ -2384,24 +2466,30 @@ function dss_elc_metrics_samples($bundle, $field) {
 
     if(array_key_exists($field, $solr_facet_field_map)) {
 
-      $facet_field = $solr_facet_field_map[$field];
+      $faceting_field = $solr_facet_field_map[$field];
     } else {
 
-      $facet_field = $field;
+      $faceting_field = $field;
     }
 
-    $facets = array('facet.field' => $facet_field);
+    $facets = array('facet.field' => $faceting_field);
 
     list($query, $results) = dss_elc_metrics_solr_query($bundles, $query, $rows, TRUE, $facets);
 
     $num_found = $results->response->numFound;
     foreach($results->facet_counts->facet_fields as $key => $facet_field) {
-      
+
       $facet_field_value = (array) $facet_field;
       
       if(!empty($facet_field_value)) {
 
 	foreach($facet_field as $sample => $quantity) {
+
+	  if(array_key_exists($faceting_field, $solr_facet_field_include) and
+	     !in_array($sample, $solr_facet_field_include[$faceting_field])) {
+	    
+	    continue;
+	  }
 
 	  // For entity reference fields...
 	  if(in_array($field, $entity_reference_fields)) {
@@ -2437,7 +2525,7 @@ function dss_elc_metrics_samples($bundle, $field) {
  * Retrieve the data for the bivariate relationships
  *
  */
-function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $metric_u = 'sum', $metric_v = 'sum') {
+function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $chart = 'bar', $metric_u = 'sum', $metric_v = 'sum') {
 
   /**
    * @todo Integrate MongoDB caching
@@ -2542,13 +2630,46 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $m
   */
   //$samples = dss_elc_metrics_samples($bundle_u, $field_u);
 
+
+
   switch($metric) {
       
   case 'sum':
   default:
 
-    $data = array_merge($data, dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $field_v));
+    $samples = array_merge($data, dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $field_v));
   }
+
+  if($chart == 'bar' or $chart == 'line') {
+
+    foreach($samples as $group => $value) {
+
+      $values = array();
+      foreach($value as $x => $y) {
+
+	$values[] = array('x' => $x,
+			  'y' => $y);
+      }
+
+      $data[] = array('key' => $group,
+		      'values' => $values);
+    }
+  } elseif($chart == 'cumulative_line') {
+
+    foreach($samples as $group => $value) {
+
+      $values = array();
+      foreach($value as $x => $y) {
+
+	$values[] = array($x, $y);
+      }
+
+      $data[] = array('key' => $group,
+		      'values' => $values);
+    }
+  }
+
+
 
   /*
   foreach(dss_elc_metrics_samples($bundle_u, $field_u) as $sample => $quantity) {
@@ -2862,14 +2983,14 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $m
 	       );
 }
 
-function dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $metric) {
+function dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $chart, $metric) {
   
   /**
    * Disabling caching for the moment
    */
   //dss_elc_metrics_cache_call(array($bundle_u, $field_u, $bundle_v, $field_v, $metric), '_dss_elc_metrics_bivariate');
 
-  return _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $metric);
+  return _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $chart, $metric);
 }
 
 function _dss_elc_metrics_network($relationship_bundle, $nids, $min=NULL, $max=NULL) {
@@ -3271,7 +3392,7 @@ function dss_elc_metrics_get_bivariate_ajax() {
       };
     */
 
-    foreach(array('bundle_u', 'field_u', 'bundle_v', 'field_v', 'metric') as $param) {
+    foreach(array('bundle_u', 'field_u', 'bundle_v', 'field_v', 'chart', 'metric') as $param) {
 
       if(array_key_exists($param, $_POST)) {
 
@@ -3284,15 +3405,14 @@ function dss_elc_metrics_get_bivariate_ajax() {
     $data = array('data' => $data['data']
 			'metadata' => $data['metadata']);
     */
-
   }
 
   if(!empty($data)) {
     
     // The JSON must be normalized
-    if(array_keys($data) === array('bundle_u', 'field_u', 'bundle_v', 'field_v', 'metric')) {
+    if(array_keys($data) === array('bundle_u', 'field_u', 'bundle_v', 'field_v', 'chart', 'metric')) {
 
-      drupal_json_output(dss_elc_metrics_bivariate($data['bundle_u'], $data['field_u'], $data['bundle_v'], $data['field_v'], $data['metric']));
+      drupal_json_output(dss_elc_metrics_bivariate($data['bundle_u'], $data['field_u'], $data['bundle_v'], $data['field_v'], $data['chart'], $data['metric']));
     }
   }
 
