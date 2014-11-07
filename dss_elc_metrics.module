@@ -2101,7 +2101,7 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 
     // Iterate through all loans
     //list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 1000000);
-    list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 10);
+    list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 1000);
 
     $loans = $results->response->docs;
     $samples = array();
@@ -2343,10 +2343,41 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 
       if($bundle_u == 'item') {
 
-	  $label = array_key_exists($item_doc->$field_u, $groups) ? $item_doc->$field_u : 'Unknown';
+	  if( array_key_exists($field_u, $entity_reference_fields) ) {
 
-	  if($item_doc->$field_u == $label or
-	     ($label == 'Unknown' and !array_key_exists($item_doc->$field_u, $groups))) {
+	    // Retrieve the label for entity reference fields
+	    $query = array();
+	    $entity_ids = $item_doc->$field_u;
+	    $entity_id = array_shift($entity_ids);
+
+	    preg_match('/node\:(\d+)/', $entity_id, $m);
+	    $nid = intval($m[1]);
+	    $query[] = 'entity_id:' . $nid;
+
+	    $range_bundles = $entity_reference_fields[$field_u];
+	      
+	    list($query, $results) = dss_elc_metrics_solr_query($range_bundles, $query, 1);
+	      
+	    $range_docs = $results->response->docs;
+
+	    if(empty($range_docs)) {
+	      
+	      $field_u_value = 'Unknown';
+	    } else {
+
+	      $field_u_value = empty($range_docs[0]->label) ? 'Unknown' : $range_docs[0]->label;
+	    }
+	  } else {
+
+	    $field_u_value = $loan_doc->$field_u;
+	  }
+
+	  $field_u_value = trim($field_u_value);
+
+	  $label = array_key_exists($field_u_value, $groups) ? $field_u_value : 'Unknown';
+
+	  if($field_u_value == $label or
+	     ($label == 'Unknown' and !array_key_exists($field_u_value, $groups))) {
 
 	    if(!array_key_exists($label, $samples)) {
 
@@ -2564,12 +2595,18 @@ function dss_elc_metrics_samples($bundle, $field) {
 
   $bundles = $bundle == 'item' ? array('item','book','periodical') : array($bundle);
 
-  $entity_reference_fields = array('field_person_location',
-				   'sm_field_bib_rel_subject'
+  $entity_reference_fields = array('sm_field_artifact_was_authored_b',
+				   
+				   'sm_field_bib_rel_subject',
+				   'sm_field_bib_rel_object',
+				   'sm_field_loan_shareholder'
 				   );
 
-  $entity_reference_bundles = array(
-				    'sm_field_bib_rel_subject' => array('human')
+  $entity_reference_bundles = array('sm_field_artifact_was_authored_b' => array('human'),
+
+				    'sm_field_bib_rel_subject' => array('human'),
+				    'sm_field_bib_rel_object' => array('item', 'book', 'periodical'),
+				    'sm_field_loan_shareholder' => array('human')
 				    );
 
   //$tid_fields = array('field_person_type');
@@ -2650,9 +2687,11 @@ function dss_elc_metrics_samples($bundle, $field) {
 	    } else {
 
 	      $sample_doc = $sample_node_results->response->docs[0];
-	      $sample = $sample_doc->label;
+	      $sample = empty($sample_doc->label) ? 'Unknown' : $sample_doc->label;
 	    }
 	  }
+
+	  $sample = trim($sample);
 
 	  $samples[$sample] = $quantity;
 	  $num_faceted += $quantity;
