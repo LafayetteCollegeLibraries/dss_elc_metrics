@@ -141,7 +141,11 @@ function dss_elc_metrics_solr_query($bundles, $query, $rows = 10, $facet = FALSE
   if($facet) {
 
     $params['facet'] = $facet;
-    $params['fq'] = $facet_query;
+
+    if(!empty($facet_query)) {
+
+      $params['fq'] = $facet_query;
+    }
 
     // Sanitize input (?)
     $params = array_merge($params, $facets);
@@ -152,10 +156,18 @@ function dss_elc_metrics_solr_query($bundles, $query, $rows = 10, $facet = FALSE
   $query_name = implode('_', array('views_datatables', $first_bundle, $query_string, $sort));
   $query_name = preg_replace('/s/', '_', $query_name);
   */
-  $query_name = implode('_', array('dss_elc_metrics', 'solr', $first_bundle, $query_string));
+  $query_name = implode('_', array('dss_elc_metrics', 'solr', $first_bundle, $query_string, $facet, $facets, $sort, $page));
   //$query_name = preg_replace('/\s/', '_', $query_name);
-  
+
   $query = apachesolr_drupal_query($query_name, $params, $sort, '', $solr);
+
+  // Work-around for the apachesolr Module
+  //! @todo Document and pose question to the maintainers of the Module
+  //
+  if(empty($facet_query)) {
+
+    $query->removeParam('fq');
+  }
 
   // Handling for the pagination of responses
   //$query->page = $request['start'] / ($request['length'] / 5);

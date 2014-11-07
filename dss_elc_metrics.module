@@ -2140,7 +2140,7 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 
     // Iterate through all loans
     //list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 1000000);
-    list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 100);
+    list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 1000);
 
     $loans = $results->response->docs;
     $samples = array();
@@ -2181,7 +2181,7 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 	$manifest_nid = $loan_doc->sm_field_bib_rel_object;
 	$query[] = 'sm_field_item_embodies:"' . $manifest_nid[0] . '"';
 	//list($query, $results) = dss_elc_metrics_solr_query($bundles_v, $query, 1000000);
-	list($query, $results) = dss_elc_metrics_solr_query(array('item', 'book', 'periodical'), $query, 1000000);
+	list($query, $results) = dss_elc_metrics_solr_query(array('item', 'book', 'periodical'), $query, 1);
 	$item_doc = $results->response->docs[0];
 
 	//! @todo Refactor
@@ -2271,6 +2271,7 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 	  foreach(array('sm_field_bib_rel_subject',
 			'sm_field_loan_shareholder') as $human_reference_field) {
 
+	    /*
 	    // This should be iterative for multiple volumes borrowed during a single loan
 	    $human_nid = $loan_doc->$human_reference_field;
 	    preg_match('/node\:(\d+)/', $human_nid[0], $m);
@@ -2310,6 +2311,55 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 		$domains[] = $rel_docs[0]->label;
 	      }
 	    }
+	    */
+
+	    // This should be iterative for multiple volumes borrowed during a single loan
+	    $human_nid = $loan_doc->$human_reference_field;
+	    preg_match('/node\:(\d+)/', $human_nid[0], $m);
+	    $human_nid = intval($m[1]);
+
+	    $query = array();
+	    $query[] = 'entity_id:"' . $human_nid . '"';
+
+	    list($query, $results) = dss_elc_metrics_solr_query($bundles_v, $query, 1);
+
+	    $human_field = $field_v;
+	    $human_doc = $results->response->docs[0];
+
+	    $domain = is_array($human_doc->$field_v) ? $human_doc->$field_v : array($human_doc->$field_v);
+
+	    if(empty($domain) or empty($domain[0])) {
+
+	      if(array_search('Unknown', $domains) === FALSE) {
+
+		$domains[] = 'Unknown';
+	      }
+	    } elseif(array_key_exists($field_v, $entity_reference_fields)) {
+
+	      preg_match('/node\:(\d+)/', $domain[0], $m);
+	      $rel_nid = intval($m[1]);
+
+	      // Retrieve the label for entity reference fields
+	      $query = array();
+	      $query[] = 'entity_id:' . $rel_nid;
+
+	      $rel_bundles = $entity_reference_fields[$field_v];
+	      
+	      list($query, $results) = dss_elc_metrics_solr_query($rel_bundles, $query, 1);
+	      
+	      $rel_docs = $results->response->docs;
+
+	      if(empty($rel_docs)) {
+
+		$domains[] = 'Unknown';
+	      } else {
+
+		$domains[] = $rel_docs[0]->label;
+	      }
+	    } else {
+	      
+	      $domains[] = $domain[0];
+	    }
 	  }
 	} elseif($bundle_v == 'loan') {
 
@@ -2329,7 +2379,8 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 
 	    $rel_bundles = $entity_reference_fields[$field_v];
 
-	    list($query, $results) = dss_elc_metrics_solr_query($rel_bundles, $query, 1000000);
+	    // Only retrieve one document
+	    list($query, $results) = dss_elc_metrics_solr_query($rel_bundles, $query, 1);
 
 	    $rel_docs = $results->response->docs;
 
@@ -2347,8 +2398,6 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 	}
       }
 
-      //print_r($domains);
-      
       /**
        * Generate the data for the (grouped) samples and link these points to the output
        *
@@ -2356,6 +2405,122 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
       if(true) {
 
 	$groups = dss_elc_metrics_samples($bundle_u, $field_u);
+
+	if($bundle_u == 'item') {
+
+	  $label = array_key_exists($item_doc->$field_u, $groups) ? $item_doc->$field_u : 'Unknown';
+
+	  if($item_doc->$field_u == $label or
+	     ($label == 'Unknown' and !array_key_exists($item_doc->$field_u, $groups))) {
+
+	    if(!array_key_exists($label, $samples)) {
+
+	      $samples[$label] = array();
+	    }
+
+	    foreach($domains as $domain) {
+
+	      if(!array_key_exists($domain, $samples[$label])) {
+
+		$samples[$label][$domain] = 1;
+	      } else {
+
+		$samples[$label][$domain]++;
+	      }
+	    }
+	  }
+	} elseif($bundle_u == 'loan') { // For loans
+
+	  if( array_key_exists($field_u, $entity_reference_fields) ) {
+	      
+	    // Retrieve the label for entity reference fields
+	    $query = array();
+	    $entity_ids = $loan_doc->$field_u;
+	    $entity_id = array_shift($entity_ids);
+
+	    preg_match('/node\:(\d+)/', $entity_id, $m);
+	    $nid = intval($m[1]);
+	    $query[] = 'entity_id:' . $nid;
+
+	    $range_bundles = $entity_reference_fields[$field_u];
+	      
+	    list($query, $results) = dss_elc_metrics_solr_query($range_bundles, $query, 1);
+	      
+	    $range_docs = $results->response->docs;
+	    
+	    if(empty($range_docs)) {
+	      
+	      $field_u_value = 'Unknown';
+	    } else {
+
+	      $field_u_value = $range_docs[0]->label;
+	    }
+	  } else {
+
+	    $field_u_value = $loan_doc->$field_u;
+	  }
+
+	  $label = array_key_exists($field_u_value, $groups) ? $field_u_value : 'Unknown';
+	  
+	  //print "value: " . $field_u_value . "\n";
+	  //print "sample: " . $label . "\n";
+
+	  if($field_u_value == $label or
+	     //$loan_doc->$field_u == $label or
+	     ($label == 'Unknown' and !array_key_exists($field_u_value, $groups))
+	     //($label == 'Unknown' and !array_key_exists($loan_doc->$field_u, $groups))
+	     ) {
+
+	    if(!array_key_exists($label, $samples)) {
+	      
+	      $samples[$label] = array();
+	    }
+	    
+	    foreach($domains as $domain) {
+	      
+	      //print "domain: " . $domain . "\n";
+	      
+	      if(!array_key_exists($domain, $samples[$label])) {
+		
+		$samples[$label][$domain] = 1;
+	      } else {
+		
+		$samples[$label][$domain]++;
+	      }
+	    }
+	  }
+
+	  /*
+	  if($label != 'Unknown' and count($samples) > 1) {
+
+	    print_r($samples);
+	    exit(1);
+	  }
+	  */
+	} else {
+
+	  print 'todo';
+	  exit(1);
+
+	  //! @todo Refactor
+	  if(!array_key_exists($label, $samples)) {
+	    
+	    $samples[$label] = array();
+	  }
+	  
+	  foreach($domains as $domain) {
+	    
+	    if(!array_key_exists($domain, $samples[$label])) {
+	      
+	      $samples[$label][$domain] = 1;
+	    } else {
+
+	      $samples[$label][$domain]++;
+	    }
+	  }
+	}
+
+	if(false) {
 
 	/*
 	foreach(array('sm_field_bib_rel_object' => 'Shareholder',
@@ -2373,12 +2538,6 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 	  */
 
 	  if($bundle_u == 'item') {
-
-	    //print $field_u;
-	    //print_r( $item_doc);
-	    //print $item_doc->$field_u;
-	    //print $label . "\n";
-	    //exit(1);
 
 	    if($item_doc->$field_u == $label or
 	       ($label == 'Unknown' and !array_key_exists($item_doc->$field_u, $groups))) {
@@ -2398,6 +2557,76 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 		  $samples[$label][$domain]++;
 		}
 	      }
+	    }
+	  } elseif($bundle_u == 'loan') { // For loans
+
+	    // $entity_reference_fields
+	    // array_key_exists(
+
+	    if( array_key_exists($field_u, $entity_reference_fields) ) {
+	      
+	      // Retrieve the label for entity reference fields
+	      $query = array();
+	      $query[] = 'entity_id:' . $field_u;
+	      $range_bundles = $entity_reference_fields[$field_u];
+	      
+	      list($query, $results) = dss_elc_metrics_solr_query($range_bundles, $query, 1000000);
+	      
+	      $range_docs = $results->response->docs;
+
+	      if(empty($range_docs)) {
+
+		$field_u_value = 'Unknown';
+	      } else {
+
+		$field_u_value = $range_docs[0]->label;
+	      }
+	    } else {
+
+	      $field_u_value = $loan_doc->$field_u;
+	    }
+
+	    /*
+	    if($label != 'Unknown') {
+
+	      print $field_u_value;
+	      print $label;
+	      exit(1);
+	    }
+	    */
+
+	    print "value: " . $field_u_value . "\n";
+	    print "sample: " . $label . "\n";
+
+	    if($field_u_value == $label or
+	       //$loan_doc->$field_u == $label or
+	       ($label == 'Unknown' and !array_key_exists($field_u_value, $groups))
+	       //($label == 'Unknown' and !array_key_exists($loan_doc->$field_u, $groups))
+	       ) {
+
+	      if(!array_key_exists($label, $samples)) {
+
+		$samples[$label] = array();
+	      }
+
+	      foreach($domains as $domain) {
+		
+		print "domain: " . $domain . "\n";
+
+		if(!array_key_exists($domain, $samples[$label])) {
+
+		  $samples[$label][$domain] = 1;
+		} else {
+
+		  $samples[$label][$domain]++;
+		}
+	      }
+	    }
+
+	    if($label != 'Unknown' and count($samples) > 1) {
+
+	      print_r($samples);
+	      exit(1);
 	    }
 	  } else {
 
@@ -2424,6 +2653,8 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 	    'samples' => array());
 	  */
 	}
+	}
+
       }
     }
 
@@ -2431,6 +2662,12 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 
       return $samples;
     }
+  }
+}
+
+function dss_elc_metrics_bivariate_summation_deprecated($bundle_u, $field_u, $bundle_v, $field_v) {
+
+  if(true) {
 
     //! @todo Refactor
 
@@ -2515,15 +2752,39 @@ function dss_elc_metrics_solr_parse() {
   
 }
 
+/**
+ * Retrieve the samples (i. e. facets and associated quantities) for the metrics
+ * @todo Integrate with the MongoDB
+ *
+ */
 function dss_elc_metrics_samples($bundle, $field) {
+
+  // Connect and attempt to retrieve the samples from the cache
+  $mongo_collection = _dss_elc_mongodb_get_collection('metrics_samples_cache');
+
+  $mongo_key = 'metrics_samples_cache' . '_' . implode('_', array($bundle, $field));
+
+  // If the samples have been cached, retrieve them
+  $cached_samples = $mongo_collection->findOne(array('sample' => $mongo_key));
+  if($cached_samples) {
+
+    return $cached_samples['data'];
+  }
 
   $bundles = $bundle == 'item' ? array('item','book','periodical') : array($bundle);
 
   $entity_reference_fields = array('field_person_location',
+				   'sm_field_bib_rel_subject'
 				   );
 
+  $entity_reference_bundles = array(
+				    'sm_field_bib_rel_subject' => array('human')
+				    );
+
   //$tid_fields = array('field_person_type');
-  $solr_facet_field_map = array('field_person_type' => 'sm_vid_Person_Types');
+  $solr_facet_field_map = array('field_person_type' => 'sm_vid_Person_Types',
+				//'sm_field_bib_rel_subject' => 'sm_vid_Subjects',
+				);
   $solr_facet_field_include = array('bundle_name' => array('Book',
 							   'Periodical',
 							   'Item'));
@@ -2552,17 +2813,21 @@ function dss_elc_metrics_samples($bundle, $field) {
     } else {
 
       $faceting_field = $field;
+      //$faceting_field = 'entity_id';
     }
 
-    $facets = array('facet.field' => $faceting_field);
+    $facets = array('facet.field' => array($faceting_field));
 
     list($query, $results) = dss_elc_metrics_solr_query($bundles, $query, $rows, TRUE, $facets);
 
     $num_found = $results->response->numFound;
-    foreach($results->facet_counts->facet_fields as $key => $facet_field) {
+
+    $facet_fields = $results->facet_counts->facet_fields;
+
+    foreach($facet_fields as $key => $facet_field) {
 
       $facet_field_value = (array) $facet_field;
-      
+
       if(!empty($facet_field_value)) {
 
 	foreach($facet_field as $sample => $quantity) {
@@ -2578,9 +2843,24 @@ function dss_elc_metrics_samples($bundle, $field) {
 	    
 	    preg_match('/node\:(\d+)/', $sample, $m);
 	    $nid = $m[1];
-	    $node = node_load($nid);
 
-	    $sample = $node->title;
+	    // Query Solr for the related Node
+	    $sample_node_query = array();
+	    $sample_node_query[] = 'entity_id:' . $nid;
+	    $sample_bundles = $entity_reference_bundles[$field];
+
+	    list($sample_node_query, $sample_node_results) = dss_elc_metrics_solr_query($sample_bundles, $sample_node_query, 1);
+
+	    $sample_docs = $sample_node_results->response->docs;
+
+	    if(empty($sample_docs)) {
+
+	      $sample = 'Unknown';
+	    } else {
+
+	      $sample_doc = $sample_node_results->response->docs[0];
+	      $sample = $sample_doc->label;
+	    }
 	  }
 
 	  $samples[$sample] = $quantity;
@@ -2598,6 +2878,11 @@ function dss_elc_metrics_samples($bundle, $field) {
 
     $samples['Unknown'] = $num_found - $num_faceted;
   }
+
+  $mongo_collection->update(array('sample' => $mongo_key),
+			    array('sample' => $mongo_key,
+				  'data' => $samples),
+			    array('upsert' => TRUE));
 
   return $samples;
 }
@@ -2711,8 +2996,6 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $c
 		$metric_v => array($bundle_v, $field_v)) as $metric => $parameters) {
   */
   //$samples = dss_elc_metrics_samples($bundle_u, $field_u);
-
-
 
   switch($metric) {
       
