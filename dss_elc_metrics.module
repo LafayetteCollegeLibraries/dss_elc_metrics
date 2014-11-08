@@ -2835,7 +2835,7 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $c
     $samples = array_merge($data, dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $field_v));
   }
 
-  print_r($samples);
+  //print_r($samples);
 
   // The closure passed to uasort() won't be invoked if the domain values for a single sample must be sorted
   foreach($samples as $domain => &$domain_values) {
@@ -2950,23 +2950,34 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $c
   }
   */
 
-  print_r($samples);
+  //print_r($samples);
 
   //! @todo Reverse for sorting by the minimum
 
   // Slice by a length specified within the site configuration
   $samples = array_slice($samples, 0, 10);
 
+  // Construct the labels
+  $labels = array();
+
   // Structure the data for the NVD3 widget
   if($chart == 'bar' or $chart == 'line') {
 
+    $domain_index = 0;
     foreach($samples as $group => $value) {
 
       $values = array();
+
       foreach($value as $x => $y) {
 
-	$values[] = array('x' => $x,
+	// Assign arbitrary values for each member of the nominal set
+	// Each value must map only to a single nominal value
+	$labels[] = $x;
+	
+	$values[] = array('x' => $domain_index,
 			  'y' => $y);
+
+	$domain_index++;
       }
 
       $data[] = array('key' => $group,
@@ -2987,7 +2998,8 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $c
     }
   }
 
-  
+  $response = array('samples' => $data,
+		    'labels' => $labels);
 
 
 
@@ -3005,10 +3017,10 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $c
   }
   */
 
-  if(true) {
+  return $response;
+}
 
-    return $data;
-  }
+function _dss_elc_metrics_bivariate_deprecated($bundle_u, $field_u, $bundle_v, $field_v, $chart = 'bar', $metric_u = 'sum', $metric_v = 'sum') {
 
   /*
   // Refactor
