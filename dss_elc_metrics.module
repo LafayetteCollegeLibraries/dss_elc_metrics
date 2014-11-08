@@ -2369,7 +2369,7 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 	    }
 	  } else {
 
-	    $field_u_value = $loan_doc->$field_u;
+	    $field_u_value = $item_doc->$field_u;
 	  }
 
 	  $field_u_value = trim($field_u_value);
@@ -2853,6 +2853,9 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $c
 
 	return $result;
       });
+
+    // Slice by a length specified within the site configuration
+    $domain_values = array_slice($domain_values, 0, 10);
   }
   
   uasort($samples, function($domain_values_u, $domain_values_v) {
