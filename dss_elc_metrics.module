@@ -2835,6 +2835,126 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $c
     $samples = array_merge($data, dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $field_v));
   }
 
+  print_r($samples);
+
+  // The closure passed to uasort() won't be invoked if the domain values for a single sample must be sorted
+  foreach($samples as $domain => &$domain_values) {
+
+    uasort($domain_values, function($domain_u, $domain_v) {
+
+	if($domain_u == $domain_v) {
+
+	  $result = 0;
+	} else {
+
+	  // This shall vary depending upon whether the values are sorted by minimum or maximum
+	  $result = ($domain_u > $domain_v) ? -1 : 1;
+	}
+
+	return $result;
+      });
+  }
+  
+  uasort($samples, function($domain_values_u, $domain_values_v) {
+
+      $domain_values_u_init = reset($domain_values_u);
+      $domain_values_v_init = reset($domain_values_v);
+
+      if($domain_values_u_init == $domain_values_v_init) {
+
+	$domain_values_u_length = count($domain_values_u);
+	$domain_values_v_length = count($domain_values_v);
+
+	if($domain_values_u_length == $domain_values_v_length) {
+
+	  $result = 0;
+	} else {
+
+	  // Prefer the least number of values within the sample (for the purposes of slicing the array)
+	  $result = ($domain_values_u_length < $domain_values_v_length) ? -1 : 1;
+	}
+      } else {
+
+	// This shall vary depending upon whether the values are ordered by minimum or maximum
+	$result = ($domain_values_u_init > $domain_values_v_init ? -1 : 1);
+      }
+
+      return $result;
+    });
+
+  /*
+
+  // Only analyses involving either the time of the loan checkout contains interval data; All other cases contain nominal data
+
+  // Sort and slice the data (for nominal data)
+  $values_sort = function($value_u, $value_v) {
+
+    if( $value_u['y'] == $value_v['y'] ) {
+
+      $result = 0;
+    } else {
+
+      $result = ($value_u['y'] < $value_v['y']) ? -1 : 1;
+    }
+
+    return $result;
+  };
+
+  foreach($samples as $sample => &$sample_values) {
+
+    print_r($sample_values);
+
+  uasort($sample, function($sample_u, $sample_v) {
+
+      print_r($sample_u);
+      print_r($sample_v);
+
+      // key
+      // values
+
+      //count($sample_u['values']) > count($sample_v['values']);
+      // When possible, prefer the sample with the greatest max as well as the greatest number of values...
+      // ...but always select the sample with the greatest max.
+
+      $sample_u_values = $sample_u['values'];
+      $sample_v_values = $sample_v['values'];
+
+      usort($sample_u_values, $values_sort);
+      usort($sample_v_values, $values_sort);
+
+      $sample_u_values_max = $sample_u_values[0];
+      $sample_v_values_max = $sample_v_values[0];
+
+      if($sample_u_values_max == $sample_v_values_max) {
+
+	$sample_u_length = count($sample_u['values']);
+	$sample_v_length = count($sample_v['values']);
+
+	if($sample_u_length == $sample_v_length) {
+
+	  $result = 0;
+	} else {
+
+	  $result = ($sample_u_length < $sample_v_length) ? -1 : 1;
+	}
+      } else {
+
+	$result = ($sample_u_values_max < $sample_v_values_max) ? -1 : 1;
+      }
+
+      return $result;
+    });
+  }
+  */
+
+  print_r($samples);
+
+  //! @todo Reverse for sorting by the minimum
+
+  // Slice by a length specified within the site configuration
+  $samples = array_slice($samples, 0, 10);
+
+  // Structure the data for the NVD3 widget
   if($chart == 'bar' or $chart == 'line') {
 
     foreach($samples as $group => $value) {
@@ -2863,6 +2983,8 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $c
 		      'values' => $values);
     }
   }
+
+  
 
 
 
