@@ -3568,7 +3568,7 @@ function dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $ch
   return _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $chart, $metric);
 }
 
-function dss_elc_metrics_network_explore($node, $depth, &$network, &$neighbors = array(), &$labels = array()) {
+function dss_elc_metrics_network_explore($node, $depth, &$network, &$neighbors = array(), &$labels = array(), &$groups = array()) {
 
   if($depth == 0) {
 
@@ -3604,9 +3604,6 @@ function dss_elc_metrics_network_explore($node, $depth, &$network, &$neighbors =
 	preg_match('/node\:(\d+)/', $neighbor_nid, $m);
 	$neighbor_nid = $m[1];
 
-	// If this node hasn't been explored yet...
-	if(!in_array($neighbor_nid, $neighbors)) {
-
 	$query = array('entity_id:' . $neighbor_nid);
 
 	list($query, $results) = dss_elc_metrics_solr_query(array('*'), $query, 1);
@@ -3625,13 +3622,21 @@ function dss_elc_metrics_network_explore($node, $depth, &$network, &$neighbors =
 			    'title' => $neighbor_title);
 	  $neighbor = (object) $neighbor;
 
+	  // Use the bundle for the group
+	  if(!array_key_exists($neighbor->nid, $groups)) {
+
+	    // Update the Groups (for D3)
+	    $groups[$neighbor->nid] = $neighbor->type;
+	  }
+
 	  if(!array_key_exists($neighbor->nid, $labels)) {
 
 	    // Update the labels
 	    $labels[$neighbor->nid] = $neighbor->title;
 	  }
 
-
+	  // If this node hasn't been explored yet...
+	  if(!in_array($neighbor->nid, $neighbors)) {
 
 	    // Add the node to the network
 	    if(!array_key_exists($node->nid, $network)) {
@@ -3688,15 +3693,26 @@ function dss_elc_metrics_network_explore($node, $depth, &$network, &$neighbors =
 	  //$neighbor_type = $neighbor_doc->bundle;
 	  $neighbor_title = $neighbor_doc->label;
 
+	  // Select only the first role for the group assingment
+	  $neighbor_roles = $neighbor_doc->sm_vid_Person_Types;
+	  $neighbor_role = array_shift($neighbor_doc->sm_vid_Person_Types);
+
 	  $neighbor = array('nid' => $neighbor_nid,
 			    'type' => 'human',
 			    'title' => $neighbor_title
 			    );
 	  $neighbor = (object) $neighbor;
 
-	  if(!array_key_exists($neighbor->nid, $labels)) {
+	  // Use human type (e. g. "Shareholder", "Representative", or "Author") for the group
+	  if(!array_key_exists($neighbor->nid, $groups)) {
+
+	    // Update the Groups (for D3)
+	    $groups[$neighbor->nid] = $neighbor_role;
+	  }
 
 	    // Update the labels
+	  if(!array_key_exists($neighbor->nid, $labels)) {
+
 	    $labels[$neighbor->nid] = $neighbor->title;
 	  }
 
@@ -3767,6 +3783,16 @@ function dss_elc_metrics_network_explore($node, $depth, &$network, &$neighbors =
 			    );
 	  $neighbor = (object) $neighbor;
 
+	  // Select only the first role for the group assignment
+	  $neighbor_roles = $neighbor_doc->sm_vid_Person_Types;
+	  $neighbor_role = array_shift($neighbor_doc->sm_vid_Person_Types);
+
+	  if(!array_key_exists($neighbor->nid, $groups)) {
+
+	    // Update the Groups (for D3)
+	    $groups[$neighbor->nid] = $neighbor_role;
+	  }
+
 	  // Update the labels
 	  if(!array_key_exists($neighbor->nid, $labels)) {
 
@@ -3810,7 +3836,7 @@ function dss_elc_metrics_network_explore($node, $depth, &$network, &$neighbors =
 
     // And for each related node, recurse
     // (Ideally, this would be implemented using concurrency, but time prevents this from being properly implemented)
-    dss_elc_metrics_network_explore($neighbor, $depth, $network, $neighbors, $labels);
+    dss_elc_metrics_network_explore($neighbor, $depth, $network, $neighbors, $labels, $groups);
   }
 }
 
@@ -3824,6 +3850,7 @@ function _dss_elc_metrics_network($nids, $depth = 1) {
   $network = array();
   $neighbors = array();
   $labels = array();
+  $groups = array();
 
   foreach($nids as $nid) {
 
@@ -3843,9 +3870,10 @@ function _dss_elc_metrics_network($nids, $depth = 1) {
       $node = (object) $node;
 
       $neighbors[] = $node;
+      $groups[$node->nid] = 'root';
       $labels[$node->nid] = $node->title;
 
-      dss_elc_metrics_network_explore($node, $depth, $network, $neighbors, $labels);
+      dss_elc_metrics_network_explore($node, $depth, $network, $neighbors, $labels, $groups);
     }
   }
 
@@ -3860,13 +3888,54 @@ function _dss_elc_metrics_network($nids, $depth = 1) {
   ]
 }
   */
+  $node_index = array();
+  $links = array();
 
-  
+  foreach($network as $node => $edges) {
 
-  $response = array('data' => $network,
-		    'labels' => $labels);
+    // First, add the initial node
+    if(!in_array($node)) {
+
+      $node_index[] = $node;
+    }
+
+    foreach($edges as $neighbor => $weight) {
+
+      if(!in_array($neighbor)) {
+
+	$node_index[] = $neighbor;
+      }
+
+      // Assume that the edges are consistently directed outwards from the node
+      $links[] = array('source' => array_search($node, $node_index),
+		       'target' => array_search($neighbor, $node_index),
+		       'value' => $weight,
+		       'type' => 'edge'
+		       );
+    }
+  }
+
+  $nodes = array();
+  foreach($node_index as $node) {
+
+    $nodes[] = array('name' => $labels[$node],
+		     'group' => $groups[$node]
+		     );
+  }
+
+  $data = array('nodes' => $nodes,
+		'links' => $links);
+
+  /*
+  $response = array(
+		    'data' => $network,
+		    'labels' => $labels,
+		    'groups' => $groups);
 
   return $response;
+  */
+
+  return $data;
 }
 
 function _dss_elc_metrics_network_deprecated($relationship_bundle, $nids, $min=NULL, $max=NULL) {
