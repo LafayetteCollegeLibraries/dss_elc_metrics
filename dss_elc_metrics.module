@@ -3583,11 +3583,12 @@ function dss_elc_metrics_network_explore($node, $depth, &$network, &$neighbors =
   //! @todo Extend for Families, Clubs, Churches, Businesses, and other Organizations
   if(in_array($node->type, array('human'))) {
 
-    // retrieve the loans/authorships related to this node
+    // Retrieve the loans/authorships related to this node
     // (Yields Items)
     $query = array('(sm_field_bib_rel_subject:"node:' . $node->nid . '" OR sm_field_loan_shareholder:"node:' . $node->nid . '")');
 
     list($query, $results) = dss_elc_metrics_solr_query(array('loan', 'authorship'), $query, 1000000);
+    //list($query, $results) = dss_elc_metrics_solr_query(array('loan', 'authorship'), $query, 10);
 
     $loan_docs = $results->response->docs;
 
@@ -3603,57 +3604,66 @@ function dss_elc_metrics_network_explore($node, $depth, &$network, &$neighbors =
 	preg_match('/node\:(\d+)/', $neighbor_nid, $m);
 	$neighbor_nid = $m[1];
 
+	// If this node hasn't been explored yet...
+	if(!in_array($neighbor_nid, $neighbors)) {
+
 	$query = array('entity_id:' . $neighbor_nid);
+
 	list($query, $results) = dss_elc_metrics_solr_query(array('*'), $query, 1);
 
 	$neighbor_docs = $results->response->docs;
-	$neighbor_doc = array_shift($neighbor_docs);
 
-	$neighbor_type = $neighbor_doc->bundle;
-	$neighbor_title = $neighbor_doc->label;
+	if(!empty($neighbor_docs)) {
 
-	$neighbor = array('nid' => $neighbor_nid,
-			  'type' => $neighbor_type,
-			  'title' => $neighbor_title);
-	$neighbor = (object) $neighbor;
+	  $neighbor_doc = array_shift($neighbor_docs);
 
-	if(!array_key_exists($neighbor->nid, $labels)) {
+	  $neighbor_type = $neighbor_doc->bundle;
+	  $neighbor_title = $neighbor_doc->label;
 
-	  // Update the labels
-	  $labels[$neighbor->nid] = $neighbor->title;
-	}
+	  $neighbor = array('nid' => $neighbor_nid,
+			    'type' => $neighbor_type,
+			    'title' => $neighbor_title);
+	  $neighbor = (object) $neighbor;
 
-	// If this node hasn't been explored yet...
-	if(!in_array($neighbor->nid, $neighbors)) {
+	  if(!array_key_exists($neighbor->nid, $labels)) {
 
-	  // Add the node to the network
-	  if(!array_key_exists($node->nid, $network)) {
-
-	    $network[$node->nid] = array();
+	    // Update the labels
+	    $labels[$neighbor->nid] = $neighbor->title;
 	  }
 
-	  if(!array_key_exists($neighbor->nid, $network[$node->nid])) {
 
-	    $network[$node->nid][$neighbor->nid] = 1;
-	  } else {
 
-	    $network[$node->nid][$neighbor->nid]++;
+	    // Add the node to the network
+	    if(!array_key_exists($node->nid, $network)) {
+
+	      $network[$node->nid] = array();
+	    }
+
+	    if(!array_key_exists($neighbor->nid, $network[$node->nid])) {
+
+	      $network[$node->nid][$neighbor->nid] = 1;
+	    } else {
+
+	      $network[$node->nid][$neighbor->nid]++;
+	    }
+
+	    // Add the node to the discovered neighbors
+	    $neighbors[] = $neighbor->nid;
 	  }
-
-	  // Add the node to the discovered neighbors
-	  $neighbors[] = $neighbor;
 	}
       }
     }
-    
+
     // retrieve the personal relationships related to this node
     // (Yields Representatives)
 
     $query = array('sm_field_pers_rel_subject:"node:' . $node->nid . '"');
 
     list($query, $results) = dss_elc_metrics_solr_query(array('personal_relationship'), $query, 1000000);
+    //list($query, $results) = dss_elc_metrics_solr_query(array('personal_relationship'), $query, 10);
 
     $pers_rel_docs = $results->response->docs;
+
     foreach($pers_rel_docs as $pers_rel_doc) {
 
       $neighbor_nids = $pers_rel_doc->sm_field_pers_rel_object;
@@ -3661,33 +3671,6 @@ function dss_elc_metrics_network_explore($node, $depth, &$network, &$neighbors =
       if(!empty($neighbor_nids)) {
 
 	$neighbor_nid = array_shift($neighbor_nids);
-
-
-	/*
-	$neighbor_nid = array_shift($neighbor_nids);
-
-	// Retrieve the title and type
-	preg_match('/node\:(\d+)/', $neighbor_nid, $m);
-	$query = array('entity_id:' . $m[1]);
-	list($query, $results) = dss_elc_metrics_solr_query(array('*'), $query, 1);
-
-	$neighbor_docs = $results->response->docs;
-	$neighbor_doc = array_shift($neighbor_docs);
-
-	$neighbor_type = $neighbor_doc->bundle;
-	$neighbor_title = $neighbor_doc->label;
-
-	$neighbor = array('nid' => $neighbor_nid,
-			  'type' => $neighbor_type,
-			  'title' => $neighbor_title);
-	$neighbor = (object) $neighbor;
-
-	if(!array_key_exists($neighbor->nid, $labels)) {
-
-	  // Update the labels
-	  $labels[$neighbor->nid] = $neighbor->title;
-	}
-	 */
 
 	// Retrieve the title
 	preg_match('/node\:(\d+)/', $neighbor_nid, $m);
@@ -3697,45 +3680,52 @@ function dss_elc_metrics_network_explore($node, $depth, &$network, &$neighbors =
 	list($query, $results) = dss_elc_metrics_solr_query(array('*'), $query, 1);
 
 	$neighbor_docs = $results->response->docs;
-	$neighbor_doc = array_shift($neighbor_docs);
 
-	//$neighbor_type = $neighbor_doc->bundle;
-	$neighbor_title = $neighbor_doc->label;
+	if(!empty($neighbor_docs)) {
 
-	$neighbor = array('nid' => $neighbor_nid,
-			  'type' => 'human',
-			  'title' => $neighbor_title
-			  );
-	$neighbor = (object) $neighbor;
+	  $neighbor_doc = array_shift($neighbor_docs);
 
-	// Update the labels
-	$labels[$neighbor->nid] = $neighbor->title;
+	  //$neighbor_type = $neighbor_doc->bundle;
+	  $neighbor_title = $neighbor_doc->label;
 
-	//$neighbors[] = $neighbor;
-	// If this node hasn't been explored yet...
-	if(!in_array($neighbor->nid, $neighbors)) {
+	  $neighbor = array('nid' => $neighbor_nid,
+			    'type' => 'human',
+			    'title' => $neighbor_title
+			    );
+	  $neighbor = (object) $neighbor;
 
-	  // Add the node to the network
-	  if(!array_key_exists($node->nid, $network)) {
+	  if(!array_key_exists($neighbor->nid, $labels)) {
 
-	    $network[$node->nid] = array();
-	    $labels[$node->nid] = $node->title;
+	    // Update the labels
+	    $labels[$neighbor->nid] = $neighbor->title;
 	  }
 
-	  if(!array_key_exists($neighbor->nid, $network[$node->nid])) {
+	  //$neighbors[] = $neighbor;
+	  // If this node hasn't been explored yet...
+	  if(!in_array($neighbor->nid, $neighbors)) {
 
-	    $network[$node->nid][$neighbor->nid] = 1;
-	  } else {
+	    // Add the node to the network
+	    if(!array_key_exists($node->nid, $network)) {
+	      
+	      $network[$node->nid] = array();
+	      $labels[$node->nid] = $node->title;
+	    }
 
-	    $network[$node->nid][$neighbor->nid]++;
+	    if(!array_key_exists($neighbor->nid, $network[$node->nid])) {
+
+	      $network[$node->nid][$neighbor->nid] = 1;
+	    } else {
+
+	      $network[$node->nid][$neighbor->nid]++;
+	    }
+
+	    // Add the node to the discovered neighbors
+	    $neighbors[] = $neighbor->nid;
 	  }
-
-	  // Add the node to the discovered neighbors
-	  $neighbors[] = $neighbor;
 	}
       }
     }
-  } elseif(in_array($node->type, array('item', 'book', 'periodical'))) {
+  } elseif(in_array($node->type, array('item', 'book', 'periodical', 'manifestation'))) {
 
     // If this is (or, is a derived from) the Item bundle...
 
@@ -3744,6 +3734,7 @@ function dss_elc_metrics_network_explore($node, $depth, &$network, &$neighbors =
     $query = array('sm_field_bib_rel_object:"node:' . $node->nid . '"');
 
     list($query, $results) = dss_elc_metrics_solr_query(array('loan', 'authorship'), $query, 1000000);
+    //list($query, $results) = dss_elc_metrics_solr_query(array('loan', 'authorship'), $query, 10);
 
     $loan_docs = $results->response->docs;
     foreach($loan_docs as $loan_doc) {
@@ -3754,17 +3745,6 @@ function dss_elc_metrics_network_explore($node, $depth, &$network, &$neighbors =
 
 	$neighbor_nid = array_shift($neighbor_nids);
 
-	// Retrieve the title and type
-	/*
-	$query = array('entity_id:' . $neighbor->nid);
-	list($query, $results) = dss_elc_metrics_solr_query(array('*'), $query, 1);
-
-	$neighbor_docs = $results->response->docs;
-	$neighbor_doc = array_shift($neighbor_docs);
-
-	$neighbor_title = $neighbor_doc->bundle;
-	*/
-
 	// Retrieve the title
 	preg_match('/node\:(\d+)/', $neighbor_nid, $m);
 	$neighbor_nid = $m[1];
@@ -3773,38 +3753,49 @@ function dss_elc_metrics_network_explore($node, $depth, &$network, &$neighbors =
 	list($query, $results) = dss_elc_metrics_solr_query(array('*'), $query, 1);
 
 	$neighbor_docs = $results->response->docs;
-	$neighbor_doc = array_shift($neighbor_docs);
 
-	//$neighbor_type = $neighbor_doc->bundle;
-	$neighbor_title = $neighbor_doc->label;
+	if( !empty($neighbor_docs) ) {
 
-	$neighbor = array('nid' => $neighbor_nid,
-			  'type' => 'human',
-			  'title' => $neighbor_title,
-			  );
-	$neighbor = (object) $neighbor;
+	  $neighbor_doc = array_shift($neighbor_docs);
 
-	//$neighbors[] = $neighbor;
-	// If this node hasn't been explored yet...
-	if(!in_array($neighbor->nid, $neighbors)) {
+	  //$neighbor_type = $neighbor_doc->bundle;
+	  $neighbor_title = $neighbor_doc->label;
 
-	  // Add the node to the network
-	  if(!array_key_exists($node->nid, $network)) {
+	  $neighbor = array('nid' => $neighbor_nid,
+			    'type' => 'human',
+			    'title' => $neighbor_title,
+			    );
+	  $neighbor = (object) $neighbor;
 
-	    $network[$node->nid] = array();
-	    $labels[$node->nid] = $node->title;
+	  // Update the labels
+	  if(!array_key_exists($neighbor->nid, $labels)) {
+
+	    // Update the labels
+	    $labels[$neighbor->nid] = $neighbor->title;
 	  }
 
-	  if(!array_key_exists($neighbor->nid, $network[$node->nid])) {
+	  //$neighbors[] = $neighbor;
+	  // If this node hasn't been explored yet...
+	  if(!in_array($neighbor->nid, $neighbors)) {
 
-	    $network[$node->nid][$neighbor->nid] = 1;
-	  } else {
+	    // Add the node to the network
+	    if(!array_key_exists($node->nid, $network)) {
 
-	    $network[$node->nid][$neighbor->nid]++;
+	      $network[$node->nid] = array();
+	      $labels[$node->nid] = $node->title;
+	    }
+
+	    if(!array_key_exists($neighbor->nid, $network[$node->nid])) {
+
+	      $network[$node->nid][$neighbor->nid] = 1;
+	    } else {
+
+	      $network[$node->nid][$neighbor->nid]++;
+	    }
+
+	    // Add the node to the discovered neighbors
+	    $neighbors[] = $neighbor->nid;
 	  }
-
-	  // Add the node to the discovered neighbors
-	  $neighbors[] = $neighbor;
 	}
       }
     }
@@ -3840,19 +3831,14 @@ function _dss_elc_metrics_network($nids, $depth = 1) {
     if(!empty($nid)) {
 
       // Retrieve the title
-      /*
-      preg_match('/node\:(\d+)/', $nid, $m);
-      $nid = $m[1];
-      */
-
       $query = array('entity_id:' . $nid);
-      list($query, $results) = dss_elc_metrics_solr_query(array('human'), $query, 1);
+      list($query, $results) = dss_elc_metrics_solr_query(array('*'), $query, 1);
 
       $node_docs = $results->response->docs;
       $node_doc = array_shift($node_docs);
 
       $node = array('nid' => $nid,
-		    'type' => 'human',
+		    'type' => $node_doc->bundle,
 		    'title' => $node_doc->label);
       $node = (object) $node;
 
@@ -3862,6 +3848,20 @@ function _dss_elc_metrics_network($nids, $depth = 1) {
       dss_elc_metrics_network_explore($node, $depth, $network, $neighbors, $labels);
     }
   }
+
+  /*
+{
+  "nodes":[
+    {"name":"Myriel","group":1},
+    {"name":"Mme.Hucheloup","group":8}
+  ],
+  "links":[
+    {"source":1,"target":0,"value":1},
+  ]
+}
+  */
+
+  
 
   $response = array('data' => $network,
 		    'labels' => $labels);
