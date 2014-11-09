@@ -55,6 +55,25 @@ function dss_elc_metrics_univariate_summation($bundle, $field) {
 
   $data = array();
 
+  // Connect and attempt to retrieve the samples from the cache
+  list($mongo_collection, $mongo) = _dss_elc_mongodb_get_collection('metrics_univariate_cache_sum');
+  $mongo_key = 'metrics_univariate_cache_sum_' . implode('_', array($bundle, $field));
+
+  // If the samples have been cached, retrieve them
+  $cached = $mongo_collection->findOne(array('query' => $mongo_key));
+
+  if($cached) {
+
+    $connections = $mongo->getConnections();
+
+    // Uncertain as to why this is necessary
+    foreach ( $connections as $conn ) {
+      
+      $closed = $mongo->close( $conn['hash'] );
+    }
+    return $cached['data'];
+  }
+
   // Query Solr and retrieve the faceted values for the field
   $query = array();
   $data = array();
@@ -92,8 +111,13 @@ function dss_elc_metrics_univariate_summation($bundle, $field) {
   $query = array();
 
   // Iterate through all loans
-  //list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 1000000);
-  list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 1000);
+
+  // ...and if this data set hasn't been cached, prepare for delayed response
+  set_time_limit(540 * 4);
+
+  // Iterate through all loans
+  list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 100000);
+  //list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 1000);
 
   $loans = $results->response->docs;
   $samples = array();
@@ -164,7 +188,8 @@ function dss_elc_metrics_univariate_summation($bundle, $field) {
 	  $domains[] = 'Unknown';
 	} else {
 	  
-	  $domains[] = $rel_docs[0]->label;
+	  //$domains[] = $rel_docs[0]->label;
+	  $domains[] = empty($rel_docs[0]->label) ? 'Unknown' : $rel_docs[0]->label;
 	}
       } else {
 	
@@ -208,7 +233,8 @@ function dss_elc_metrics_univariate_summation($bundle, $field) {
 	    $domains[] = 'Unknown';
 	  } else {
 	    
-	    $domains[] = $rel_docs[0]->label;
+	    //$domains[] = $rel_docs[0]->label;
+	    $domains[] = empty($rel_docs[0]->label) ? 'Unknown' : $rel_docs[0]->label;
 	  }
 	} else {
 	  
@@ -243,7 +269,7 @@ function dss_elc_metrics_univariate_summation($bundle, $field) {
 	  $domains[] = 'Unknown';
 	} else {
 	  
-	  $domains[] = $rel_docs[0]->label;
+	  $domains[] = empty($rel_docs[0]->label) ? 'Unknown' : $rel_docs[0]->label;
 	}
       } else {
 	
@@ -258,6 +284,10 @@ function dss_elc_metrics_univariate_summation($bundle, $field) {
 		     );
 
   $label = $label_map[$bundle];
+  if(!array_key_exists($label, $samples)) {
+
+    $samples[$label] = array();
+  }
 
   foreach($domains as $domain) {
 
@@ -268,6 +298,19 @@ function dss_elc_metrics_univariate_summation($bundle, $field) {
 
       $samples[$label][$domain]++;
     }
+  }
+
+  $mongo_collection->update(array('query' => $mongo_key),
+			    array('query' => $mongo_key,
+				  'data' => $samples),
+			    array('upsert' => TRUE));
+
+  $connections = $mongo->getConnections();
+
+  // Uncertain as to why this is necessary
+  foreach ( $connections as $conn ) {
+      
+    $closed = $mongo->close( $conn['hash'] );
   }
   
   return $samples;
@@ -3525,7 +3568,294 @@ function dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $ch
   return _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $chart, $metric);
 }
 
-function _dss_elc_metrics_network($relationship_bundle, $nids, $min=NULL, $max=NULL) {
+function dss_elc_metrics_network_explore($node, $depth, &$network, &$neighbors = array(), &$labels = array()) {
+
+  if($depth == 0) {
+
+    return;
+  }
+
+  // For a given node, retrieve the relationships
+
+  //$neighbors = array();
+
+  // If this is a derived from the Person bundle...
+  //! @todo Extend for Families, Clubs, Churches, Businesses, and other Organizations
+  if(in_array($node->type, array('human'))) {
+
+    // retrieve the loans/authorships related to this node
+    // (Yields Items)
+    $query = array('(sm_field_bib_rel_subject:"node:' . $node->nid . '" OR sm_field_loan_shareholder:"node:' . $node->nid . '")');
+
+    list($query, $results) = dss_elc_metrics_solr_query(array('loan', 'authorship'), $query, 1000000);
+
+    $loan_docs = $results->response->docs;
+
+    foreach($loan_docs as $loan_doc) {
+
+      $neighbor_nids = $loan_doc->sm_field_bib_rel_object;
+
+      if(!empty($neighbor_nids)) {
+
+	$neighbor_nid = array_shift($neighbor_nids);
+
+	// Retrieve the title and type
+	preg_match('/node\:(\d+)/', $neighbor_nid, $m);
+	$neighbor_nid = $m[1];
+
+	$query = array('entity_id:' . $neighbor_nid);
+	list($query, $results) = dss_elc_metrics_solr_query(array('*'), $query, 1);
+
+	$neighbor_docs = $results->response->docs;
+	$neighbor_doc = array_shift($neighbor_docs);
+
+	$neighbor_type = $neighbor_doc->bundle;
+	$neighbor_title = $neighbor_doc->label;
+
+	$neighbor = array('nid' => $neighbor_nid,
+			  'type' => $neighbor_type,
+			  'title' => $neighbor_title);
+	$neighbor = (object) $neighbor;
+
+	if(!array_key_exists($neighbor->nid, $labels)) {
+
+	  // Update the labels
+	  $labels[$neighbor->nid] = $neighbor->title;
+	}
+
+	// If this node hasn't been explored yet...
+	if(!in_array($neighbor->nid, $neighbors)) {
+
+	  // Add the node to the network
+	  if(!array_key_exists($node->nid, $network)) {
+
+	    $network[$node->nid] = array();
+	  }
+
+	  if(!array_key_exists($neighbor->nid, $network[$node->nid])) {
+
+	    $network[$node->nid][$neighbor->nid] = 1;
+	  } else {
+
+	    $network[$node->nid][$neighbor->nid]++;
+	  }
+
+	  // Add the node to the discovered neighbors
+	  $neighbors[] = $neighbor;
+	}
+      }
+    }
+    
+    // retrieve the personal relationships related to this node
+    // (Yields Representatives)
+
+    $query = array('sm_field_pers_rel_subject:"node:' . $node->nid . '"');
+
+    list($query, $results) = dss_elc_metrics_solr_query(array('personal_relationship'), $query, 1000000);
+
+    $pers_rel_docs = $results->response->docs;
+    foreach($pers_rel_docs as $pers_rel_doc) {
+
+      $neighbor_nids = $pers_rel_doc->sm_field_pers_rel_object;
+
+      if(!empty($neighbor_nids)) {
+
+	$neighbor_nid = array_shift($neighbor_nids);
+
+
+	/*
+	$neighbor_nid = array_shift($neighbor_nids);
+
+	// Retrieve the title and type
+	preg_match('/node\:(\d+)/', $neighbor_nid, $m);
+	$query = array('entity_id:' . $m[1]);
+	list($query, $results) = dss_elc_metrics_solr_query(array('*'), $query, 1);
+
+	$neighbor_docs = $results->response->docs;
+	$neighbor_doc = array_shift($neighbor_docs);
+
+	$neighbor_type = $neighbor_doc->bundle;
+	$neighbor_title = $neighbor_doc->label;
+
+	$neighbor = array('nid' => $neighbor_nid,
+			  'type' => $neighbor_type,
+			  'title' => $neighbor_title);
+	$neighbor = (object) $neighbor;
+
+	if(!array_key_exists($neighbor->nid, $labels)) {
+
+	  // Update the labels
+	  $labels[$neighbor->nid] = $neighbor->title;
+	}
+	 */
+
+	// Retrieve the title
+	preg_match('/node\:(\d+)/', $neighbor_nid, $m);
+	$neighbor_nid = $m[1];
+
+	$query = array('entity_id:' . $neighbor_nid);
+	list($query, $results) = dss_elc_metrics_solr_query(array('*'), $query, 1);
+
+	$neighbor_docs = $results->response->docs;
+	$neighbor_doc = array_shift($neighbor_docs);
+
+	//$neighbor_type = $neighbor_doc->bundle;
+	$neighbor_title = $neighbor_doc->label;
+
+	$neighbor = array('nid' => $neighbor_nid,
+			  'type' => 'human',
+			  'title' => $neighbor_title
+			  );
+	$neighbor = (object) $neighbor;
+
+	// Update the labels
+	$labels[$neighbor->nid] = $neighbor->title;
+
+	//$neighbors[] = $neighbor;
+	// If this node hasn't been explored yet...
+	if(!in_array($neighbor->nid, $neighbors)) {
+
+	  // Add the node to the network
+	  if(!array_key_exists($node->nid, $network)) {
+
+	    $network[$node->nid] = array();
+	    $labels[$node->nid] = $node->title;
+	  }
+
+	  if(!array_key_exists($neighbor->nid, $network[$node->nid])) {
+
+	    $network[$node->nid][$neighbor->nid] = 1;
+	  } else {
+
+	    $network[$node->nid][$neighbor->nid]++;
+	  }
+
+	  // Add the node to the discovered neighbors
+	  $neighbors[] = $neighbor;
+	}
+      }
+    }
+  } elseif(in_array($node->type, array('item', 'book', 'periodical'))) {
+
+    // If this is (or, is a derived from) the Item bundle...
+
+    // retrieve the loans/authorships related to this node
+    // (Yields Representatives and Authors)
+    $query = array('sm_field_bib_rel_object:"node:' . $node->nid . '"');
+
+    list($query, $results) = dss_elc_metrics_solr_query(array('loan', 'authorship'), $query, 1000000);
+
+    $loan_docs = $results->response->docs;
+    foreach($loan_docs as $loan_doc) {
+
+      $neighbor_nids = $loan_doc->sm_field_bib_rel_subject;
+
+      if(!empty($neighbor_nids)) {
+
+	$neighbor_nid = array_shift($neighbor_nids);
+
+	// Retrieve the title and type
+	/*
+	$query = array('entity_id:' . $neighbor->nid);
+	list($query, $results) = dss_elc_metrics_solr_query(array('*'), $query, 1);
+
+	$neighbor_docs = $results->response->docs;
+	$neighbor_doc = array_shift($neighbor_docs);
+
+	$neighbor_title = $neighbor_doc->bundle;
+	*/
+
+	// Retrieve the title
+	preg_match('/node\:(\d+)/', $neighbor_nid, $m);
+	$neighbor_nid = $m[1];
+
+	$query = array('entity_id:' . $neighbor_nid);
+	list($query, $results) = dss_elc_metrics_solr_query(array('*'), $query, 1);
+
+	$neighbor_docs = $results->response->docs;
+	$neighbor_doc = array_shift($neighbor_docs);
+
+	//$neighbor_type = $neighbor_doc->bundle;
+	$neighbor_title = $neighbor_doc->label;
+
+	$neighbor = array('nid' => $neighbor_nid,
+			  'type' => 'human',
+			  'title' => $neighbor_title,
+			  );
+	$neighbor = (object) $neighbor;
+
+	//$neighbors[] = $neighbor;
+	// If this node hasn't been explored yet...
+	if(!in_array($neighbor->nid, $neighbors)) {
+
+	  // Add the node to the network
+	  if(!array_key_exists($node->nid, $network)) {
+
+	    $network[$node->nid] = array();
+	    $labels[$node->nid] = $node->title;
+	  }
+
+	  if(!array_key_exists($neighbor->nid, $network[$node->nid])) {
+
+	    $network[$node->nid][$neighbor->nid] = 1;
+	  } else {
+
+	    $network[$node->nid][$neighbor->nid]++;
+	  }
+
+	  // Add the node to the discovered neighbors
+	  $neighbors[] = $neighbor;
+	}
+      }
+    }
+  }
+
+  // Retrieve the object of each relationship
+  // Increment the depth
+  $depth--;
+
+  // Iterate through each relationship...
+  foreach($neighbors as $neighbor) {
+
+    // And for each related node, recurse
+    // (Ideally, this would be implemented using concurrency, but time prevents this from being properly implemented)
+    dss_elc_metrics_network_explore($neighbor, $depth, $network, $neighbors, $labels);
+  }
+}
+
+/**
+ * Explore the network to a certain depth for a given set of nodes
+ * (This is formatted in a manner which can be deserialized for networkx in Python)
+ */
+//function _dss_elc_metrics_network($relationship_bundle, $nids, $min=NULL, $max=NULL, $depth = 1) {
+function _dss_elc_metrics_network($nids, $depth = 1) {
+
+  $network = array();
+  $neighbors = array();
+  $labels = array();
+
+  foreach($nids as $nid) {
+
+    //! @todo Refactor
+    if(!empty($nid)) {
+
+      $node = array('nid' => $nid,
+		    'type' => 'human');
+      $node = (object) $node;
+
+      $neighbors[] = $node;
+
+      dss_elc_metrics_network_explore($node, $depth, $network, $neighbors, $labels);
+    }
+  }
+
+  $response = array('data' => $network,
+		    'labels' => $labels);
+
+  return $response;
+}
+
+function _dss_elc_metrics_network_deprecated($relationship_bundle, $nids, $min=NULL, $max=NULL) {
   
   if($relationship_bundle == 'loan') {
 
@@ -4007,6 +4337,7 @@ function dss_elc_metrics_get_network_ajax() {
 
     // The JSON must be normalized
     if(array_keys($data) === array('bundle', 'subject_nids', 'limit')) {
+    //if(array_keys($data) === array('subject_nids')) {
 
       // Normalize Drupal form data
       if(gettype($data['subject_nids']) == 'string') {
@@ -4040,6 +4371,7 @@ function dss_elc_metrics_get_network_ajax() {
       // Caching
       //return drupal_json_output(dss_elc_metrics_network($data['bundle'], $data['subject_nids'], $min_date, $max_date));
 
+      /*
       if(array_key_exists('value2', $data['limit']) and array_key_exists('value', $data['limit'])) {
 
 	return drupal_json_output(_dss_elc_metrics_network($data['bundle'], $data['subject_nids'], $data['limit']['value'], $data['limit']['value2']));
@@ -4047,6 +4379,9 @@ function dss_elc_metrics_get_network_ajax() {
 
 	return drupal_json_output(_dss_elc_metrics_network($data['bundle'], $data['subject_nids']));
       }
+      */
+
+      return drupal_json_output(_dss_elc_metrics_network($data['subject_nids']));
     }
   }
 }

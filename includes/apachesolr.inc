@@ -60,7 +60,8 @@ function dss_elc_metrics_solr_query($bundles, $query, $rows = 10, $facet = FALSE
     $bundle_query = $bundle_query[0];
   } else {
 
-    $bundle_query = '(' . implode(' OR ', $bundle_query) . ')';
+    //$bundle_query = '(' . implode(' OR ', $bundle_query) . ')';
+    $bundle_query = 'bundle:(' . implode(' OR ', $bundles) . ')';
   }
   
   // Build the field-scoped search
