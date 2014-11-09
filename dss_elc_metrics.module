@@ -3839,11 +3839,25 @@ function _dss_elc_metrics_network($nids, $depth = 1) {
     //! @todo Refactor
     if(!empty($nid)) {
 
+      // Retrieve the title
+      /*
+      preg_match('/node\:(\d+)/', $nid, $m);
+      $nid = $m[1];
+      */
+
+      $query = array('entity_id:' . $nid);
+      list($query, $results) = dss_elc_metrics_solr_query(array('human'), $query, 1);
+
+      $node_docs = $results->response->docs;
+      $node_doc = array_shift($node_docs);
+
       $node = array('nid' => $nid,
-		    'type' => 'human');
+		    'type' => 'human',
+		    'title' => $node_doc->label);
       $node = (object) $node;
 
       $neighbors[] = $node;
+      $labels[$node->nid] = $node->title;
 
       dss_elc_metrics_network_explore($node, $depth, $network, $neighbors, $labels);
     }
@@ -4213,14 +4227,6 @@ function _dss_elc_metrics_network_deprecated($relationship_bundle, $nids, $min=N
 	       );
 }
 
-function dss_elc_metrics_network($relationship_bundle, $nids, $min_date=NULL, $max_date=NULL) {
-
-  /**
-   * @todo To be integrated
-   */
-  //dss_elc_metrics_cache_call(array($relationship_bundle, $nids, $min_date=NULL, $max_date=NULL), '_dss_elc_metrics_network');
-}
-
 /**
  * @author griffinj
  * Visualizing bivariate analyses
@@ -4319,7 +4325,7 @@ function dss_elc_metrics_get_network_ajax() {
   } else {
 
     // Refactor
-    foreach(array('bundle', 'subject_nids', 'limit') as $param) {
+    foreach(array('bundle', 'subject_nids', 'limit', 'depth') as $param) {
 
       if(array_key_exists($param, $_POST)) {
 
@@ -4336,8 +4342,12 @@ function dss_elc_metrics_get_network_ajax() {
     }
 
     // The JSON must be normalized
-    if(array_keys($data) === array('bundle', 'subject_nids', 'limit')) {
+    //if(array_keys($data) === array('bundle', 'subject_nids', 'limit', 'depth')) {
     //if(array_keys($data) === array('subject_nids')) {
+
+    $diff = array_diff(array_keys($data), array('bundle', 'subject_nids', 'limit', 'depth'));
+
+    if(empty($diff)) {
 
       // Normalize Drupal form data
       if(gettype($data['subject_nids']) == 'string') {
@@ -4381,7 +4391,7 @@ function dss_elc_metrics_get_network_ajax() {
       }
       */
 
-      return drupal_json_output(_dss_elc_metrics_network($data['subject_nids']));
+      return drupal_json_output(_dss_elc_metrics_network($data['subject_nids'], $data['depth']));
     }
   }
 }
