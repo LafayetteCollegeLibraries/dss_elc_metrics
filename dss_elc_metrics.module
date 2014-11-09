@@ -2366,13 +2366,20 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
   $bundles = $bundles_u;
 
   // Connect and attempt to retrieve the samples from the cache
-  $mongo_collection = _dss_elc_mongodb_get_collection('metrics_bivariate_cache_sum');
+  list($mongo_collection, $mongo) = _dss_elc_mongodb_get_collection('metrics_bivariate_cache_sum');
   $mongo_key = 'metrics_bivariate_cache_sum_' . implode('_', array($bundle_u, $field_u, $bundle_v, $field_v));
 
   // If the samples have been cached, retrieve them
   $cached = $mongo_collection->findOne(array('query' => $mongo_key));
   if($cached) {
 
+    $connections = $mongo->getConnections();
+
+    // Uncertain as to why this is necessary
+    foreach ( $connections as $conn ) {
+      
+      $closed = $mongo->close( $conn['hash'] );
+    }
     return $cached['data'];
   }
 
@@ -2505,7 +2512,7 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 	    $domains[] = 'Unknown';
 	  } else {
 	    
-	    $domains[] = $rel_docs[0]->label;
+	    $domains[] = empty($rel_docs[0]->label) ? 'Unknown' : $rel_docs[0]->label;
 	  }
 	} else {
 	  
@@ -2549,7 +2556,7 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 	      $domains[] = 'Unknown';
 	    } else {
 	      
-	      $domains[] = $rel_docs[0]->label;
+	      $domains[] = empty($rel_docs[0]->label) ? 'Unknown' : $rel_docs[0]->label;
 	    }
 	  } else {
 	    
@@ -2557,7 +2564,7 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 	  }
 	}
       } elseif($bundle_v == 'loan') {
-	
+
 	$domain = is_array($loan_doc->$field_v) ? $loan_doc->$field_v : array($loan_doc->$field_v);
 	
 	if(empty($domain) or empty($domain[0])) {
@@ -2583,8 +2590,8 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 	    
 	    $domains[] = 'Unknown';
 	  } else {
-	    
-	    $domains[] = $rel_docs[0]->label;
+
+	    $domains[] = empty($rel_docs[0]->label) ? 'Unknown' : $rel_docs[0]->label;
 	  }
 	} else {
 	  
@@ -2607,17 +2614,24 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 	  // Retrieve the label for entity reference fields
 	  $query = array();
 	  $entity_ids = $item_doc->$field_u;
-	  $entity_id = array_shift($entity_ids);
+
+	  if(empty($entity_ids)) {
+
+	    $range_docs = $results->response->docs;
+	  } else {
+
+	    $entity_id = array_shift($entity_ids);
 	  
-	  preg_match('/node\:(\d+)/', $entity_id, $m);
-	  $nid = intval($m[1]);
-	  $query[] = 'entity_id:' . $nid;
+	    preg_match('/node\:(\d+)/', $entity_id, $m);
+	    $nid = intval($m[1]);
+	    $query[] = 'entity_id:' . $nid;
 	  
-	  $range_bundles = $entity_reference_fields[$field_u];
+	    $range_bundles = $entity_reference_fields[$field_u];
 	  
-	  list($query, $results) = dss_elc_metrics_solr_query($range_bundles, $query, 1);
+	    list($query, $results) = dss_elc_metrics_solr_query($range_bundles, $query, 1);
 	  
-	  $range_docs = $results->response->docs;
+	    $range_docs = $results->response->docs;
+	  }
 	  
 	  if(empty($range_docs)) {
 	    
@@ -2628,7 +2642,11 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 	  }
 	} else {
 	  
-	  $field_u_value = $item_doc->$field_u;
+	  $field_u_value = is_array($item_doc->$field_u) ? array_shift($item_doc->$field_u) : $item_doc->$field_u;
+	  if(empty($field_u_value)) {
+
+	    $field_u_value = 'Unknown';
+	  }
 	}
 	
 	$field_u_value = trim($field_u_value);
@@ -2661,24 +2679,31 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 	  // Retrieve the label for entity reference fields
 	  $query = array();
 	  $entity_ids = $loan_doc->$field_u;
-	  $entity_id = array_shift($entity_ids);
-	  
-	  preg_match('/node\:(\d+)/', $entity_id, $m);
-	  $nid = intval($m[1]);
-	  $query[] = 'entity_id:' . $nid;
-	  
-	  $range_bundles = $entity_reference_fields[$field_u];
-	  
-	  list($query, $results) = dss_elc_metrics_solr_query($range_bundles, $query, 1);
-	  
-	  $range_docs = $results->response->docs;
+
+	  if(empty($entity_ids)) {
+
+	    $range_docs = array();
+	  } else {
+
+	    $entity_id = array_shift($entity_ids);
+	    
+	    preg_match('/node\:(\d+)/', $entity_id, $m);
+	    $nid = intval($m[1]);
+	    $query[] = 'entity_id:' . $nid;
+	    
+	    $range_bundles = $entity_reference_fields[$field_u];
+	    
+	    list($query, $results) = dss_elc_metrics_solr_query($range_bundles, $query, 1);
+	    
+	    $range_docs = $results->response->docs;
+	  }
 	  
 	  if(empty($range_docs)) {
 	    
 	    $field_u_value = 'Unknown';
 	  } else {
 	    
-	    $field_u_value = $range_docs[0]->label;
+	    $field_u_value = empty($range_docs[0]->label) ? 'Unknown' : $range_docs[0]->label;
 	  }
 	} else {
 	  
@@ -2744,6 +2769,12 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 			      array('query' => $mongo_key,
 				    'data' => $samples),
 			      array('upsert' => TRUE));
+
+    // Uncertain as to why this is necessary
+    foreach ( $connections as $conn ) {
+      
+      $closed = $mongo->close( $conn['hash'] );
+    }
     
     return $samples;
   }
@@ -2844,7 +2875,7 @@ function dss_elc_metrics_solr_parse() {
 function dss_elc_metrics_samples($bundle, $field) {
 
   // Connect and attempt to retrieve the samples from the cache
-  $mongo_collection = _dss_elc_mongodb_get_collection('metrics_samples_cache');
+  list($mongo_collection, $mongo) = _dss_elc_mongodb_get_collection('metrics_samples_cache');
 
   $mongo_key = 'metrics_samples_cache' . '_' . implode('_', array($bundle, $field));
 
@@ -3875,23 +3906,8 @@ function dss_elc_metrics_get_bivariate_ajax() {
     $data = file_get_contents("php://input");
     $data = json_decode($data, TRUE);
 
-    //$object = array();
-
     drupal_json_output($data);
   } else {
-
-    /*
-
-      data : [
-      { domain: 'subjectA', values: [ { sample: 'sampleA', value: 45 }, { sample: 'sampleB', value: 54 } ] },
-      { domain: 'subjectB', values: [ { sample: 'sampleA', value: 67 }, { sample: 'sampleB', value: 76 } ] },
-      { domain: 'subjectC', values: [ { sample: 'sampleA', value: 88 }, { sample: 'sampleB', value: 78 } ] } ],
-
-      metadata: [				       
-      { label: 'domain', type: 'temporal', axis: 'x' },
-      { label: 'value', type: 'ratio', axis: 'y' } ]
-      };
-    */
 
     foreach(array('bundle_u', 'field_u', 'bundle_v', 'field_v', 'chart', 'metric') as $param) {
 
@@ -4081,7 +4097,7 @@ function dss_elc_metrics_get_people($request) {
 
 	$rows = $_GET['length'];
 
-	$mongo_collection = _dss_elc_mongodb_get_collection('views_datatables_cache');
+	list($mongo_collection, $mongo) = _dss_elc_mongodb_get_collection('views_datatables_cache');
 
 	// @todo Refactor into a map/reduce operation?
 	$filtered_by_search = FALSE;
@@ -4310,14 +4326,14 @@ function _dss_elc_metrics_items_records_sort($records, $field = 'title', $order 
  */
 function _dss_elc_mongodb_get_collection($collection_name = 'views_datatables_cache', $db = 'dss_elc_mongodb', $options = array()) {
 
-  $host = variable_get('dss_elc_metrics_mongodb_host', 'santorini0.stage.lafayette.edu');
+  $host = variable_get('dss_elc_metrics_mongodb_host', 'mongodb://santorini0.stage.lafayette.edu');
 
   //$mongo = new Mongo($host, $options);
   $mongo = new MongoClient($host, $options);
   $mongo_db = $mongo->selectDB($db);
   $mongo_collection = $mongo_db->selectCollection($collection_name);
 
-  return $mongo_collection;
+  return array($mongo_collection, $mongo);
 }
 
 /*
@@ -4387,7 +4403,7 @@ function dss_elc_metrics_get_items($request = NULL) {
 	$start = $_GET['start'];
 	$row = $_GET['length'];
 
-	$mongo_collection = _dss_elc_mongodb_get_collection('views_datatables_cache');
+	list($mongo_collection, $mongo) = _dss_elc_mongodb_get_collection('views_datatables_cache');
 
 	// @todo Refactor into a map/reduce operation?
 	$filtered_by_search = FALSE;
@@ -4945,7 +4961,7 @@ function dss_elc_metrics_get_loans($request = NULL) {
   $row = $request['length'];
   
   // Caching for non-filtered responses
-  $mongo_collection = _dss_elc_mongodb_get_collection('views_datatables_cache');
+  list($mongo_collection, $mongo) = _dss_elc_mongodb_get_collection('views_datatables_cache');
   
   // @todo Refactor into a map/reduce operation?
   $filtered_by_search = FALSE;
