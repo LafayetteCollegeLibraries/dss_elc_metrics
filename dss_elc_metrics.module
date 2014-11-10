@@ -5321,13 +5321,6 @@ function dss_elc_metrics_get_loans($request = NULL) {
   $request = !is_null($request) ? $request : $_GET;
   $nid = array_key_exists('nid', $request) ? $request['nid'] : NULL;
 
-  $filter_query = NULL;
-
-  if(!is_null($nid)) {
-
-    $filter_query = '(sm_field_bib_rel_subject:"node:' . $nid . '" OR sm_field_bib_rel_object:"node:' . $nid . '")';
-  }
-
   //Declaring query object
   $query = new EntityFieldQuery();
   
@@ -5431,6 +5424,36 @@ function dss_elc_metrics_get_loans($request = NULL) {
 
       // ...and if this data set hasn't been cached, prepare for delayed response
       set_time_limit(420);
+    }
+  }
+
+  /**
+   * Filter for the specified Node
+   *
+   */
+
+  $filter_query = NULL;
+
+  if(!is_null($nid)) {
+
+    // Find the bundle
+    list($query, $results) = dss_elc_metrics_solr_query(array('*'), array('entity_id:' . $nid), 1);
+
+    if(!empty($results->response->docs)) {
+
+      $node_doc = array_shift($results->response->docs);
+
+      if($node_doc->bundle == 'human') {
+
+	$filter_query = '(sm_field_bib_rel_subject:"node:' . $nid . '" OR sm_field_loan_shareholder:"node:' . $nid . '")';
+      } else {
+
+	$manifestations = $node_doc->sm_field_item_embodies;
+	$nid = array_shift($manifestations);
+
+	$filter_query = '(sm_field_bib_rel_object:"' . $nid . '")';
+
+      }
     }
   }
 
