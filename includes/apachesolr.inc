@@ -217,6 +217,10 @@ function dss_elc_metrics_datatables_query($bundles, $request, $filter_query = NU
   // Handling for single or multiple bundles
   $first_bundle = $bundles[0];
 
+  /**
+   * Crafting the Solr/Lucene query
+   *
+   */
   $bundle_query = array_map(function($bundle) {
 
       return 'bundle:' . $bundle;
@@ -251,6 +255,10 @@ function dss_elc_metrics_datatables_query($bundles, $request, $filter_query = NU
   }
   $query_string .= implode(' AND ', $query);
 
+  /**
+   * Sorting functionality
+   *
+   */
   // Retrieve the name of the Solr field
   $solr_field = $solr_field_map[$first_bundle][intval($request['order']['0']['column'])];
 

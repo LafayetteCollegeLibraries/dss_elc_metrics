@@ -5319,13 +5319,13 @@ function dss_elc_metrics_views_datatables_mongo_key($prefix, $view, $sort_value,
 function dss_elc_metrics_get_loans($request = NULL) {
 
   $request = !is_null($request) ? $request : $_GET;
-  $nid = array_key_exists('nid', $request) ? $nid : NULL;
+  $nid = array_key_exists('nid', $request) ? $request['nid'] : NULL;
 
   $filter_query = NULL;
 
   if(!is_null($nid)) {
 
-    $filter_query = '(sm_field_bib_rel_subject:"' . $nid . '" OR sm_field_bib_rel_object:"' . $nid . '")';
+    $filter_query = '(sm_field_bib_rel_subject:"node:' . $nid . '" OR sm_field_bib_rel_object:"node:' . $nid . '")';
   }
 
   //Declaring query object
@@ -5422,7 +5422,7 @@ function dss_elc_metrics_get_loans($request = NULL) {
     // Retrieve the cached data set from the MongoDB
     $cached_datatable_json = $mongo_collection->findOne(array('view' => $mongo_key));
     if($cached_datatable_json) {
-      
+
       $data = $cached_datatable_json['data'];
       $data['draw'] = intval($request['draw']) + 1;
       
@@ -5451,11 +5451,10 @@ function dss_elc_metrics_get_loans($request = NULL) {
 			      array('upsert' => TRUE));
   }
   
-  if(true) {
-    
-    return drupal_json_output($datatable_json);
-  }
-  exit(1);
+  return drupal_json_output($datatable_json);
+}
+
+function dss_elc_metrics_get_loans_deprecated($request = NULL) {
   
   //If we are sorting by last changed date
   if($sort_value == 'changed'){
