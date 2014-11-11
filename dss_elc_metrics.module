@@ -151,8 +151,8 @@ function dss_elc_metrics_univariate_summation($bundle, $field) {
   set_time_limit(540 * 4);
 
   // Iterate through all loans
-  //list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 100000);
-  list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 10);
+  list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 100000);
+  //list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 1000);
 
   $loans = $results->response->docs;
   $samples = array();
@@ -165,9 +165,19 @@ function dss_elc_metrics_univariate_summation($bundle, $field) {
     // This should be iterative for multiple volumes borrowed during a single loan
     $manifest_nid = $loan_doc->sm_field_bib_rel_object;
     $query[] = 'sm_field_item_embodies:"' . $manifest_nid[0] . '"';
+
     //list($query, $results) = dss_elc_metrics_solr_query($bundles_v, $query, 1000000);
     list($query, $results) = dss_elc_metrics_solr_query(array('item', 'book', 'periodical'), $query, 1);
-    $item_doc = $results->response->docs[0];
+
+    //$item_doc = $results->response->docs[0];
+    $item_docs = $results->response->docs;
+
+    if(empty($item_docs)) {
+
+      continue;
+    }
+
+    $item_doc = $item_docs[0];
 
     $human_docs = array();
 
@@ -200,7 +210,8 @@ function dss_elc_metrics_univariate_summation($bundle, $field) {
 
       $domain = is_array($item_doc->$field) ? $item_doc->$field : array($item_doc->$field);
 
-      if(empty($domain) or empty($domain[0])) {
+      if(empty($domain) or 
+	 ($domain[0] !== 0 and empty($domain[0]))) {
 
 	$domains[] = 'Unknown';
       } elseif(array_key_exists($field, $entity_reference_fields)) {
@@ -214,7 +225,7 @@ function dss_elc_metrics_univariate_summation($bundle, $field) {
 	
 	$rel_bundles = $entity_reference_fields[$field];
 	
-	list($query, $results) = dss_elc_metrics_solr_query($rel_bundles, $query, 1000000);
+	list($query, $results) = dss_elc_metrics_solr_query($rel_bundles, $query, 1);
 	
 	$rel_docs = $results->response->docs;
 	
@@ -222,7 +233,7 @@ function dss_elc_metrics_univariate_summation($bundle, $field) {
 	  
 	  $domains[] = 'Unknown';
 	} else {
-	  
+
 	  //$domains[] = $rel_docs[0]->label;
 	  $domains[] = empty($rel_docs[0]->label) ? 'Unknown' : $rel_docs[0]->label;
 	}
@@ -234,11 +245,15 @@ function dss_elc_metrics_univariate_summation($bundle, $field) {
 	 */
 	if(array_key_exists($field, $constant_values)) {
 
+	  //print 'trace2' . "\n";
+
 	  $domain = $constant_values[$field][$domain[0]];
 	} else {
 
-	  $domains[] = $domain[0];
+	  $domain = $domain[0];
 	}
+
+	$domains[] = $domain;
       }
       
     } elseif($bundle == 'human') {
@@ -249,15 +264,25 @@ function dss_elc_metrics_univariate_summation($bundle, $field) {
       foreach($human_docs as $human_doc) {
 	
 	//$human_doc = $results->response->docs[0];
-	
-	$domain = is_array($human_doc->$field) ? $human_doc->$field : array($human_doc->$field);
+
+	// Handling for field-specific cases
+	//! @todo Refactor
+
+	$domain_value = property_exists($human_doc, $field) ? $human_doc->$field : array();
+	$domain = is_array($domain_value) ? $domain_value : array($domain_value);
+
+	//$domain = is_array($human_doc->$field) ? $human_doc->$field : array($human_doc->$field);
 	
 	if(empty($domain) or empty($domain[0])) {
-	  
+
+	  /*
 	  if(array_search('Unknown', $domains) === FALSE) {
 	    
 	    $domains[] = 'Unknown';
 	  }
+	  */
+	  $domains[] = 'Unknown';
+
 	} elseif(array_key_exists($field, $entity_reference_fields)) {
 	  
 	  preg_match('/node\:(\d+)/', $domain[0], $m);
@@ -391,38 +416,6 @@ function dss_elc_metrics_univariate_summation($bundle, $field) {
   }
   
   return $samples;
-}
-
-function tmp_sort($domain_values_u, $domain_values_v) {
-
-  print 'trace';
-
-      $domain_values_u_init = reset($domain_values_u);
-      $domain_values_v_init = reset($domain_values_v);
-
-      if($domain_values_u_init == $domain_values_v_init) {
-
-	// Field-specific handling
-	//! @todo Refactor
-	$domain_values_u_sort = intval($domain_values_u_init);
-	$domain_values_v_sort = intval($domain_values_v_init);
-
-	if($domain_values_u_sort == $domain_values_v_sort) {
-
-	  $result = 0;
-	} else {
-
-	  // Prefer the least number of values within the sample (for the purposes of slicing the array)
-	  $result = ($domain_values_u_sort < $domain_values_v_sort) ? -1 : 1;
-	}
-
-      } else {
-
-	// This shall vary depending upon whether the values are ordered by minimum or maximum
-	$result = ($domain_values_u_init > $domain_values_v_init ? -1 : 1);
-      }
-
-      return $result;
 }
 
 /**
@@ -2591,6 +2584,8 @@ function dss_elc_metrics_fields_solr_fields() {
 
 			  'field_human_gender' => 'bs_field_gender',
 			  'field_person_type' => 'sm_vid_Person_Types',
+			  'field_human_occupation' => 'sm_vid_Occupations',
+			  'field_person_location' => 'sm_field_person_location',
 
 			  'field_bib_rel_subject' => 'sm_field_bib_rel_subject',
 			  'field_loan_shareholder' => 'sm_field_loan_shareholder',
