@@ -80,10 +80,15 @@ function dss_elc_metrics_univariate_summation($bundle, $field) {
 
   $field_solr_map = array('field_artifact_was_authored_by' => 'sm_field_artifact_was_authored_b',
 			  'field_item_subject' => 'sm_vid_Item_Subjects',
-			  'field_item_format' => 'bundle_name',
+			  'field_item_format' => 'im_field_item_format',
+			  'type' => 'bundle_name',
 
 			  'field_human_gender' => 'bs_field_gender',
 			  'field_person_type' => 'sm_vid_Person_Types',
+
+			  'field_human_occupation' => 'sm_vid_Occupations',
+			  'field_person_location' => 'sm_field_person_location',
+			  'field_person_membership' => 'sm_field_person_membership',
 
 			  'field_bib_rel_subject' => 'sm_field_bib_rel_subject',
 			  'field_loan_shareholder' => 'sm_field_loan_shareholder',
@@ -91,11 +96,14 @@ function dss_elc_metrics_univariate_summation($bundle, $field) {
 			  'field_loan_duration_value_0' => 'is_field_loan_duration_value'
 			  );
 
-  $entity_reference_fields = array('sm_field_artifact_was_authored_b' => array('human'),
-				   
+  $entity_reference_fields = array('sm_field_artifact_was_authored_b' => array('human'),				   
 				   'sm_field_bib_rel_subject' => array('human'),
 				   'sm_field_loan_shareholder' => array('human'),
-				   'sm_field_bib_rel_object' => array('item', 'book', 'periodical')
+
+				   'sm_field_bib_rel_object' => array('item', 'book', 'periodical'),
+
+				   'sm_field_person_location' => array('location'),
+				   'sm_field_person_membership' => array('membership')
 				   );
 
   $solr_field_sample_label_map = array('sm_field_artifact_was_authored_b' => 'Author',
@@ -104,6 +112,11 @@ function dss_elc_metrics_univariate_summation($bundle, $field) {
 
 				       'bs_field_gender' => 'Gender',
 				       'sm_vid_Person_Types' => 'Type');
+
+  $constant_values = array('im_field_item_format' => array('Octavo',
+							   'Quarto',
+							   'Duodecimo'));
+
 
   $field = $field_solr_map[$field];
 
@@ -192,8 +205,18 @@ function dss_elc_metrics_univariate_summation($bundle, $field) {
 	  $domains[] = empty($rel_docs[0]->label) ? 'Unknown' : $rel_docs[0]->label;
 	}
       } else {
-	
-	$domains[] = $domain[0];
+
+	/**
+	 * Handling for constant values (managed within Solr fields)
+	 *
+	 */
+	if(array_key_exists($field, $constant_values)) {
+
+	  $domain = $constant_values[$field][$domain[0]];
+	} else {
+
+	  $domains[] = $domain[0];
+	}
       }
       
     } elseif($bundle == 'human') {
@@ -424,8 +447,16 @@ function dss_elc_metrics_univariate($bundle, $field, $chart = 'bar', $metric = '
 	$domain_index++;
       }
 
-      $data[] = array('key' => $group,
-		      'values' => $values);
+      $datum = array('key' => $group,
+		     'values' => $values);
+
+      // Work-around in order to prevent the area from being filled in
+      if($chart == 'line') {
+
+	$datum['area'] = FALSE;
+      }
+
+      $data[] = $datum;
     }
 
   } elseif($chart == 'pie') {
@@ -3232,15 +3263,25 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $c
 	// Assign arbitrary values for each member of the nominal set
 	// Each value must map only to a single nominal value
 	$labels[] = $x;
-	
-	$values[] = array('x' => $domain_index,
-			  'y' => $y);
+
+	$double = array('x' => $domain_index,
+			'y' => $y);
+
+	$values[] = $double;
 
 	$domain_index++;
       }
 
-      $data[] = array('key' => $group,
-		      'values' => $values);
+      $datum = array('key' => $group,
+		     'values' => $values);
+
+      // Work-around in order to prevent the area from being filled in
+      if($chart == 'line') {
+
+	$datum['area'] = FALSE;
+      }
+      
+      $data[] = $datum;
     }
   } elseif($chart == 'cumulative_line') {
 
@@ -3252,8 +3293,10 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $c
 	$values[] = array($x, $y);
       }
 
-      $data[] = array('key' => $group,
-		      'values' => $values);
+      $datum = array('key' => $group,
+		     'values' => $values);
+
+      $data[] = $datum;
     }
   }
 
