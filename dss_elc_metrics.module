@@ -61,10 +61,6 @@ function dss_elc_metrics_field_constant_values() {
 
 function dss_elc_metrics_univariate_summation($bundle, $field) {
 
-  $samples = array();
-
-  $samples = array('sample' => array('domain' => 256));
-
   $bundles = $bundle == 'item' ? array('item','book','periodical') : array($bundle);
 
   $data = array();
@@ -78,8 +74,8 @@ function dss_elc_metrics_univariate_summation($bundle, $field) {
   // If the samples have been cached, retrieve them
   $cached = $mongo_collection->findOne(array('query' => $mongo_key));
 
-  //if(false) {
-  if($cached) {
+  if(false) {
+  //if($cached) {
 
     // Uncertain as to why this is necessary
     foreach ( $connections as $conn ) {
@@ -155,8 +151,8 @@ function dss_elc_metrics_univariate_summation($bundle, $field) {
   set_time_limit(540 * 4);
 
   // Iterate through all loans
-  list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 100000);
-  //list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 1000);
+  //list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 100000);
+  list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 100);
 
   $loans = $results->response->docs;
   $samples = array();
@@ -484,6 +480,22 @@ function dss_elc_metrics_univariate($bundle, $field, $chart = 'bar', $metric = '
 
       $domain_values = $normal_domain_values;
     }
+
+    $normal_domain_values = array();
+
+    $i = 0;
+    foreach($domain_values as $key => $value) {
+
+      if($i > 9) {
+
+	break;
+      }
+      
+      $normal_domain_values[$key] = $value;
+      $i++;
+    }
+
+    $domain_values = $normal_domain_values;
   }
 
   // Field-specific handling
