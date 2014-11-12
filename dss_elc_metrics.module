@@ -74,8 +74,8 @@ function dss_elc_metrics_univariate_summation($bundle, $field) {
   // If the samples have been cached, retrieve them
   $cached = $mongo_collection->findOne(array('query' => $mongo_key));
 
-  if(false) {
-  //if($cached) {
+  //if(false) {
+  if($cached) {
 
     // Uncertain as to why this is necessary
     foreach ( $connections as $conn ) {
@@ -151,8 +151,8 @@ function dss_elc_metrics_univariate_summation($bundle, $field) {
   set_time_limit(540 * 4);
 
   // Iterate through all loans
-  //list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 100000);
-  list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 100);
+  list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 100000);
+  //list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 100);
 
   $loans = $results->response->docs;
   $samples = array();
@@ -2652,8 +2652,7 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
   // If the samples have been cached, retrieve them
   $cached = $mongo_collection->findOne(array('query' => $mongo_key));
 
-  //if($cached) {
-  if(false) {
+  if($cached) {
 
     // Uncertain as to why this is necessary
     foreach ( $connections as $conn ) {
@@ -2730,8 +2729,8 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
     // ...and if this data set hasn't been cached, prepare for delayed response
     set_time_limit(540 * 4);
 
-    //list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 1000000);
-    list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 100);
+    list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 1000000);
+    //list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 100);
 
     $loans = $results->response->docs;
     $samples = array();
