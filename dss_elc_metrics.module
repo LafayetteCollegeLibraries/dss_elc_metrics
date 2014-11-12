@@ -588,7 +588,15 @@ function dss_elc_metrics_univariate($bundle, $field, $chart = 'bar', $metric = '
 
 	// Assign arbitrary values for each member of the nominal set
 	// Each value must map only to a single nominal value
-	$labels[] = $x;
+
+	// Parsing for datestamps
+	if($field == 'field_loan_duration_value_0') {
+
+	  $labels[] = date('Y-m-d', intval($x));
+	} else {
+
+	  $labels[] = $x;
+	}
 	
 	$values[] = array('x' => $domain_index,
 			  'y' => $y);
@@ -614,8 +622,14 @@ function dss_elc_metrics_univariate($bundle, $field, $chart = 'bar', $metric = '
 
       foreach($value as $x => $y) {
 
+	// Parsing for datestamps
+	if($field == 'field_loan_duration_value_0') {
+
+	  $x = date('Y-m-d', intval($x));
+	}
+
 	$data[] = array('label' => $x,
-			  'value' => $y);
+			'value' => $y);
       }
     }
   } elseif($chart == 'cumulative_line') {
@@ -3638,7 +3652,15 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $c
 	
 	if($x_value === FALSE) {
 
-	  $labels[] = $x;
+	  // Parsing for datestamps
+	  if($field_v == 'field_loan_duration_value_0') {
+	  
+	    $labels[] = date('Y-m-d', intval($x));
+	  } else {
+
+	    $labels[] = $x;
+	  }
+
 	  $x_value = $domain_index;
 	}
 	
@@ -3648,6 +3670,12 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $c
 	$values[] = $double;
 
 	$domain_index++;
+      }
+
+      // Parsing for datestamps
+      if($field_u == 'field_loan_duration_value_0') {
+	  
+	$group = date('Y-m-d', intval($group));
       }
 
       $datum = array('key' => $group,
