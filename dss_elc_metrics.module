@@ -2863,9 +2863,9 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 
 	// Handling for field-specific cases
 	//! @todo Refactor
-	if($field == 'sm_field_loan_shareholder') {
+	if($field_v == 'sm_field_loan_shareholder') {
 
-	  $field = (property_exists($loan_doc, $field) and !empty($loan_doc->$field)) ? $field : 'sm_field_bib_rel_subject';
+	  $field_v = (property_exists($loan_doc, $field_v) and !empty($loan_doc->$field_v)) ? $field_v : 'sm_field_bib_rel_subject';
 	}
 
 	$domain = is_array($loan_doc->$field_v) ? $loan_doc->$field_v : array($loan_doc->$field_v);
@@ -2874,11 +2874,12 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 
 	  // Handling for field-specific cases
 	  //! @todo Refactor
-	  if($field == 'sm_field_bib_rel_object') {
+	  if($field_v == 'sm_field_bib_rel_object' or
+	     $field_v == 'sm_field_loan_shareholder') {
 
 	    continue;
 	  }
-	  
+
 	  $domains[] = 'Unknown';
 	} elseif(array_key_exists($field_v, $entity_reference_fields)) {
 	  
@@ -2904,7 +2905,15 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 	  $rel_docs = $results->response->docs;
 	  
 	  if(empty($rel_docs)) {
-	    
+
+	    // Handling for field-specific cases
+	    //! @todo Refactor
+	    if($field_v == 'sm_field_bib_rel_object' or
+	       $field_v == 'sm_field_loan_shareholder') {
+
+	      continue;
+	    }
+
 	    $domains[] = 'Unknown';
 	  } else {
 
@@ -2981,7 +2990,8 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 	
 	$field_u_value = trim($field_u_value);
 	
-	$label = array_key_exists($field_u_value, $groups) ? $field_u_value : 'Unknown';
+	//$label = array_key_exists($field_u_value, $groups) ? $field_u_value : 'Unknown';
+	$label = $field_u_value;
 	
 	if($field_u_value == $label or
 	   ($label == 'Unknown' and !array_key_exists($field_u_value, $groups))) {
