@@ -2705,7 +2705,7 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
     set_time_limit(540 * 4);
 
     //list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 1000000);
-    list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 100);
+    list($query, $results) = dss_elc_metrics_solr_query(array('loan'), $query, 10);
 
     $loans = $results->response->docs;
     $samples = array();
@@ -2964,7 +2964,7 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 	  $field_u_value = property_exists($item_doc, $field_u) ? $item_doc->$field_u : array();
 	  $field_u_value = is_array($field_u_value) ? array_shift($field_u_value) : $field_u_value;
 
-	  if(empty($field_u_value) or
+	  if(empty($field_u_value) and
 	     ($field_u_value !== 0)) {
 	    
 	    $field_u_value = 'Unknown';
