@@ -198,13 +198,13 @@ function dss_elc_metrics_datatables_query($bundles, $request, $filter_query = NU
   $url = variable_get('apachesolr_host', 'localhost');
 
   $solr = new DrupalApacheSolrService('http://santorini0.stage.lafayette.edu:8080/solr' . '/' . 'elc');
-  $solr_field_map = array('loan' => array('ss_field_loan_shareholder_label',
-					  'ss_field_bib_rel_subject_label',
+  $solr_field_map = array('loan' => array('sort_field_loan_shareholder_label',
+					  'sort_field_bib_rel_subject_label',
 					  'is_field_loan_duration_value',
-					  'ss_field_bib_rel_object_label',
+					  'sort_field_bib_rel_object_label',
 					  'is_field_loan_volumes_loaned_first',
 					  'is_changed'),
-			  'item' => array('ss_field_artifact_was_authored_by_label',
+			  'item' => array('sort_field_artifact_was_authored_by_label',
 					  'label',
 					  'is_field_item_volume_migrate',
 					  'ss_field_artifact_type_constant',
@@ -240,7 +240,7 @@ function dss_elc_metrics_datatables_query($bundles, $request, $filter_query = NU
 
     if(trim($search['search']['value']) != '' ) {
 	    
-      $query[] = $solr_field_map[$first_bundle][$i] . ':' . trim($search['search']['value']) . '*';
+      $query[] = $solr_field_map[$first_bundle][$i] . ':*' . trim($search['search']['value']) . '*';
     }
   }
 
