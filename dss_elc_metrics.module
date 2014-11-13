@@ -2166,32 +2166,7 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
     $query = array();
     $data = array();
 
-    /*
-    $field_solr_map = array('field_artifact_was_authored_by' => 'sm_field_artifact_was_authored_b',
-			    'field_item_subject' => 'sm_vid_Item_Subjects',
-			    'field_item_format' => 'im_field_item_format',
-			    'type' => 'bundle_name',
-
-			    'field_human_gender' => 'bs_field_gender',
-			    'field_person_type' => 'sm_vid_Person_Types',
-
-			    'field_bib_rel_subject' => 'sm_field_bib_rel_subject',
-			    'field_loan_shareholder' => 'sm_field_loan_shareholder',
-			    'field_bib_rel_object' => 'sm_field_bib_rel_object',
-			    'field_loan_duration_value_0' => 'is_field_loan_duration_value'
-			    );
-    */
-
     $field_solr_map = dss_elc_metrics_fields_solr_fields();
-
-    /*
-    $entity_reference_fields = array('sm_field_artifact_was_authored_b' => array('human'),
-
-				     'sm_field_bib_rel_subject' => array('human'),
-				     'sm_field_loan_shareholder' => array('human'),
-				     'sm_field_bib_rel_object' => array('item', 'book', 'periodical')
-				     );
-    */
 
     $entity_reference_fields = dss_elc_metrics_fields_entity_reference();
 
@@ -2440,8 +2415,7 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
       /**
        * Generate the data for the (grouped) samples and link these points to the output
        *
-       */
-      
+       */      
       $groups = dss_elc_metrics_samples($bundle_u, $field_u);
       
       if($bundle_u == 'item') {
@@ -2542,7 +2516,8 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 
 	    // Handling for field-specific cases
 	    //! @todo Refactor
-	    if($field_u == 'sm_field_bib_rel_object') {
+	    if($field_u == 'sm_field_loan_shareholder' or
+	       $field_u == 'sm_field_bib_rel_object') {
 
 	      continue;
 	    }
@@ -3055,10 +3030,21 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $c
     $i = 0;
     foreach($domain_values as $key => $value) {
 
+      // For the domain values
+      // Work-around
+      //! @todo Refactor
+      if($key == 'Unknown' and 
+	 !($field_u == 'field_human_gender' or
+	   $field_u == 'field_human_occupation' or
+	   $field_u == 'field_person_membership')) {
+
+	continue;
+      }
+
       //! @todo Refactor for maintaining the key/value association
       //! @todo Refactor for providing a UI component for setting the limit on the number of domains restricted
       //if($i > 9) {
-      if($i > 5) {
+      if($i > 3) {
 
 	break;
       }
@@ -3111,7 +3097,7 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $c
     //! @todo Refactor for maintaining the key/value association
     //! @todo Refactor for providing a UI component for setting the limit on the number of domains restricted
     //if($i > 9) {
-    if($i > 5) {
+    if($i > 3) {
 
       break;
     }
