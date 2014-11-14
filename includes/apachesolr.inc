@@ -214,7 +214,8 @@ function dss_elc_metrics_datatables_query($bundles, $request, $filter_query = NU
 					  'label',
 					  //'is_field_item_volume_migrate',
 					  'im_field_item_volume_migrate',
-					  'ss_field_artifact_type_constant',
+					  //'ss_field_artifact_type_constant',
+					  'bundle_name',
 					  'ss_field_item_subject',
 					  'is_changed'),
 			  'human' => array('label',
@@ -258,9 +259,12 @@ function dss_elc_metrics_datatables_query($bundles, $request, $filter_query = NU
 
   foreach($request['columns'] as $i => $search) {
 
+    $search['search']['value'] = trim($search['search']['value']);
+
     if(trim($search['search']['value']) != '' ) {
 
-      // This is ineffective for integer values
+      // Work-around for integer values
+      // Resolves EDDC-444
       if(in_array($solr_field_map[$first_bundle][$i], $solr_num_fields)) {
 
 	$query_field_values = preg_split('/[\s,]/', trim($search['search']['value']) );
@@ -273,6 +277,14 @@ function dss_elc_metrics_datatables_query($bundles, $request, $filter_query = NU
 
 	$query[] = implode(' OR ', $query_fields);
       } else {
+
+	// Work-around for the absence of a sort_bundle_name field
+	// Resolves EDDC-445
+	//! @todo Resolve properly by modifying the Apache Solr indexing process (EDDC-446)
+	if($solr_field_map[$first_bundle][$i] == 'bundle_name') {
+
+	  $search['search']['value'] = ucfirst($search['search']['value']);
+	}
 	    
 	$query[] = $solr_field_map[$first_bundle][$i] . ':*' . trim($search['search']['value']) . '*';
       }
