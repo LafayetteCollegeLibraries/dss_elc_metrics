@@ -9,28 +9,16 @@ require_once dirname(__FILE__) . '/includes/apachesolr.inc';
 function dss_elc_metrics_menu() {
 
   $items = array(
-		 'metrics' => array(
-				    'page callback' => 'dss_elc_metrics_get_node_metrics_ajax',
+		 'metrics' => array('page callback' => 'dss_elc_metrics_get_node_metrics_ajax',
 				    'access callback' => TRUE,
 				    ),
-		 'dss_elc_metrics/univariate' => array(
-						       'page callback' => 'dss_elc_metrics_univariate_ajax',
+		 'dss_elc_metrics/univariate' => array('page callback' => 'dss_elc_metrics_univariate_ajax',
 						       'access callback' => TRUE
 						       ),
-		 'bivariate' => array(
-				      'page callback' => 'dss_elc_metrics_get_bivariate_ajax',
+		 'bivariate' => array('page callback' => 'dss_elc_metrics_get_bivariate_ajax',
 				      'access callback' => TRUE),
-		 'network' => array(
-				    'page callback' => 'dss_elc_metrics_get_network_ajax',
+		 'network' => array('page callback' => 'dss_elc_metrics_get_network_ajax',
 				    'access callback' => TRUE),
-//		 'loaned/items' => array(
-//					 'page callback' => 'dss_elc_metrics_get_items_loaned_ajax',
-//					 'access callback' => TRUE,
-//					 ),
-//		 'persons/loaned/items' => array(
-//						 'page callback' => 'dss_elc_metrics_get_items_loaned_persons_ajax',
-//						 'access callback' => TRUE,
-//						 ),
 		 'datatable_person/views/people' => array('page callback' => 'dss_elc_metrics_get_people',
 							  'access callback' => TRUE,
 							  ),
@@ -489,8 +477,9 @@ function dss_elc_metrics_univariate($bundle, $field, $chart = 'bar', $metric = '
     foreach($domain_values as $key => $value) {
 
       //if($i > 9) {
-      if($i > 4) {
+      if($i > 3) {
 
+	$i++;
 	break;
       }
       
@@ -3047,6 +3036,7 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $c
       if($i > 3) {
 
 	break;
+	$i++;
       }
 
       $norm_domain_values[$key] = $value;
@@ -3100,6 +3090,7 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $c
     if($i > 3) {
 
       break;
+      $i++;
     }
 
     $norm_samples[$key] = $value;
@@ -4484,8 +4475,8 @@ function dss_elc_metrics_get_people($request) {
 
 	  // Retrieve the cached data set from the MongoDB
 	  $cached_datatable_json = $mongo_collection->findOne(array('view' => $mongo_key));
-	  //if($cached_datatable_json) {
-	  if(false) {
+	  if($cached_datatable_json) {
+	  //if(false) {
 
 	    $data = $cached_datatable_json['data'];
 	    $data['draw'] = intval($_GET['draw']) + 1;
@@ -4791,6 +4782,7 @@ function dss_elc_metrics_get_items($request = NULL) {
 	  // Retrieve the cached data set from the MongoDB
 	  $cached_datatable_json = $mongo_collection->findOne(array('view' => $mongo_key));
 	  if($cached_datatable_json) {
+	    //if(false) {
 
 	    $data = $cached_datatable_json['data'];
 	    $data['draw'] = intval($_GET['draw']) + 1;
@@ -5349,6 +5341,7 @@ function dss_elc_metrics_get_loans($request = NULL) {
     
     // Retrieve the cached data set from the MongoDB
     $cached_datatable_json = $mongo_collection->findOne(array('view' => $mongo_key));
+
     if($cached_datatable_json) {
 
       $data = $cached_datatable_json['data'];
@@ -5394,6 +5387,7 @@ function dss_elc_metrics_get_loans($request = NULL) {
 
   //list($final_query, $response) = apachesolr_do_query($query);
   list($final_query, $solr_response) = dss_elc_metrics_datatables_query(array('loan'), $request, $filter_query);
+
   $datatable_json = dss_elc_metrics_datatables_response($solr_response, array('loan'));
 
   /**

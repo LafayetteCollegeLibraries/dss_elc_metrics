@@ -247,6 +247,12 @@ function dss_elc_metrics_datatables_query($bundles, $request, $filter_query = NU
   // For aggregating and storing the total number of records
   $is_unfiltered_query = empty($query);
 
+  /*
+   * In order to ensure that NULL values are filtered
+   */
+  $filter_not_null = '+' . $solr_field_map[ $first_bundle ][0] . ':[* TO *]';
+  $query[] = $filter_not_null;
+
   $query_string = $bundle_query;
 
   if(!empty($query) ) {
@@ -303,13 +309,8 @@ function dss_elc_metrics_datatables_query($bundles, $request, $filter_query = NU
   
   $query = apachesolr_drupal_query($query_name, $params, $sort, '', $solr);
 
-  /*
-  if ($query->getParam('q')) {
-
-    apachesolr_search_add_spellcheck_params($query);
-  }
-  */
-  $query->page = $request['start'] / ($request['length'] / 5);
+  //$query->page = $request['start'] / ($request['length'] / 5);
+  $query->page = $request['start'] / ($request['length']);
 
   list($query, $solr_response) = apachesolr_do_query($query);
 
