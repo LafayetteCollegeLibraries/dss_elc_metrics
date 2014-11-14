@@ -110,6 +110,8 @@ function dss_elc_metrics_solr_query($bundles, $query, $rows = 10, $facet = FALSE
   }
   $query_string .= implode(' AND ', $query);
 
+  
+
   // Handling for sorting
   
   /*
@@ -210,13 +212,18 @@ function dss_elc_metrics_datatables_query($bundles, $request, $filter_query = NU
 					  'is_changed'),
 			  'item' => array('sort_field_artifact_was_authored_by_label',
 					  'label',
-					  'is_field_item_volume_migrate',
+					  //'is_field_item_volume_migrate',
+					  'im_field_item_volume_migrate',
 					  'ss_field_artifact_type_constant',
 					  'ss_field_item_subject',
 					  'is_changed'),
 			  'human' => array('label',
 					   'is_changed')
 			  );
+
+  $solr_num_fields = array('is_field_loan_volumes_loaned_first',
+			   'im_field_item_volume_migrate'
+			   );
 
   // Handling for single or multiple bundles
   $first_bundle = $bundles[0];
@@ -252,8 +259,23 @@ function dss_elc_metrics_datatables_query($bundles, $request, $filter_query = NU
   foreach($request['columns'] as $i => $search) {
 
     if(trim($search['search']['value']) != '' ) {
+
+      // This is ineffective for integer values
+      if(in_array($solr_field_map[$first_bundle][$i], $solr_num_fields)) {
+
+	$query_field_values = preg_split('/[\s,]/', trim($search['search']['value']) );
+
+	$query_fields = array();
+	foreach($query_field_values as $value) {
+
+	  $query_fields[] = $solr_field_map[$first_bundle][$i] . ':' . $value;
+	}
+
+	$query[] = implode(' OR ', $query_fields);
+      } else {
 	    
-      $query[] = $solr_field_map[$first_bundle][$i] . ':*' . trim($search['search']['value']) . '*';
+	$query[] = $solr_field_map[$first_bundle][$i] . ':*' . trim($search['search']['value']) . '*';
+      }
     }
   }
 
