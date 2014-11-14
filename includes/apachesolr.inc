@@ -63,7 +63,8 @@ function dss_elc_metrics_solr_query($bundles, $query, $rows = 10, $facet = FALSE
     //$bundle_query = '(' . implode(' OR ', $bundle_query) . ')';
     $bundle_query = 'bundle:(' . implode(' OR ', $bundles) . ')';
   }
-  
+
+  //! @todo Review and refactor (or remove)
   // Build the field-scoped search
   /*
   $query = array();
@@ -77,6 +78,8 @@ function dss_elc_metrics_solr_query($bundles, $query, $rows = 10, $facet = FALSE
   }
   */
 
+  //! @todo Review and refactor (or remove)
+  /*
   // Replace the bundle field names with the appropriate Solr index field names
   foreach($query as &$query_field) {
 
@@ -86,6 +89,7 @@ function dss_elc_metrics_solr_query($bundles, $query, $rows = 10, $facet = FALSE
       //$query_field = preg_replace('/' . $bundle_field . '/', $solr_field, $query_field);
     }
   }
+  */
 
   foreach($facets as &$facet_field) {
 
@@ -232,6 +236,15 @@ function dss_elc_metrics_datatables_query($bundles, $request, $filter_query = NU
   } else {
 
     $bundle_query = '(' . implode(' OR ', $bundle_query) . ')';
+  }
+
+  // Extended for the filtration (or inclusion) of authors
+  // Resolves EDDC-443
+  if($first_bundle == 'human' and
+     (!array_key_exists('authors', $request) or
+      $request['authors'] == 'false')) {
+
+    $bundle_query .= ' AND -sm_vid_Person_Types:Author';
   }
   
   $query = array();
