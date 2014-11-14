@@ -216,7 +216,8 @@ function dss_elc_metrics_datatables_query($bundles, $request, $filter_query = NU
 					  'im_field_item_volume_migrate',
 					  //'ss_field_artifact_type_constant',
 					  'bundle_name',
-					  'ss_field_item_subject',
+					  //'ss_field_item_subject',
+					  'sort_field_item_subject',
 					  'is_changed'),
 			  'human' => array('label',
 					   'is_changed')
@@ -282,7 +283,7 @@ function dss_elc_metrics_datatables_query($bundles, $request, $filter_query = NU
 	// Resolves EDDC-445
 	//! @todo Resolve properly by modifying the Apache Solr indexing process (EDDC-446)
 	if($solr_field_map[$first_bundle][$i] == 'bundle_name') {
-
+	  
 	  $search['search']['value'] = ucfirst($search['search']['value']);
 	}
 	    
