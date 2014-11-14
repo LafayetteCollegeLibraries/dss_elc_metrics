@@ -3017,27 +3017,64 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $c
     //! @todo Refactor
     $norm_domain_values = array();
     $i = 0;
+
+    $requested_domains = array();
+
     foreach($domain_values as $key => $value) {
 
       // For the domain values
       // Work-around
       //! @todo Refactor
-      if($key == 'Unknown' and 
-	 !($field_u == 'field_human_gender' or
-	   $field_u == 'field_human_occupation' or
-	   $field_u == 'field_person_membership')) {
+
+      if($key == 'Unknown' and
+	 !in_array($field_v, array('field_human_gender',
+				   'field_human_occupation',
+				   'field_person_membership'
+				   ))) {
 
 	continue;
       }
 
+      //$norm_domain_values = array();
+      //$i = 0;
+
+      //$norm_values = array();
+
+      /*
+      // After sorting, slice each domain value
+      foreach($value as $domain => $range) {
+
+	print $domain;
+	exit(1);
+
+	if(count($requested_domains) < 10 and !in_array($domain, $requested_domains)) {
+
+	  $requested_domains[] = $domain;
+	  $norm_values[$domain] = $range;
+	}
+      }
+      */
+
+      //$value = $norm_values;
+
       //! @todo Refactor for maintaining the key/value association
       //! @todo Refactor for providing a UI component for setting the limit on the number of domains restricted
       //if($i > 9) {
-      if($i > 3) {
+      //if($i > 4) {
+      if(count($requested_domains) > 2 or in_array($key, $requested_domains)) {
 
 	break;
-	$i++;
       }
+
+      $requested_domains[] = $key;
+
+      /*
+      if(count($requested_domains) < 10 and !in_array($key, $requested_domains)) {
+
+	$requested_domains[] = $key;
+	$norm_values[$key] = $value;
+      }
+      */
 
       $norm_domain_values[$key] = $value;
 
@@ -3087,7 +3124,7 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $c
     //! @todo Refactor for maintaining the key/value association
     //! @todo Refactor for providing a UI component for setting the limit on the number of domains restricted
     //if($i > 9) {
-    if($i > 3) {
+    if($i > 4) {
 
       break;
       $i++;
@@ -3107,6 +3144,16 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $c
 
     $domain_index = 0;
     foreach($samples as $group => $value) {
+
+      // Work-around for filtering authors
+      if($group == 'Author' or
+	 ($group == 'Unknown' and
+	  !in_array($field_u, array('field_human_gender',
+				    'field_human_occupation',
+				    'field_person_membership')))) {
+	
+	continue;
+      }
 
       $values = array();
 
@@ -3130,6 +3177,7 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $c
 	  }
 
 	  $x_value = $domain_index;
+	  $domain_index++;
 	}
 	
 	$double = array('x' => $x_value,
@@ -3137,7 +3185,7 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $c
 
 	$values[] = $double;
 
-	$domain_index++;
+
       }
 
       // Parsing for datestamps
