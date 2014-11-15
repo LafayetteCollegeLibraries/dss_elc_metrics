@@ -2270,8 +2270,11 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 	    
 	    $domains[] = 'Unknown';
 	  } else {
-	    
-	    $domains[] = empty($rel_docs[0]->label) ? 'Unknown' : $rel_docs[0]->label;
+
+	    // These values must be stripped of leading and trailing whitespace for the purposes of analysis
+	    // Resolves EDDC-458
+	    $rel_doc_label = empty($rel_docs[0]->label) ? 'Unknown' : $rel_docs[0]->label;
+	    $domains[] = trim($rel_doc_label);
 	  }
 	} else {
 	  
