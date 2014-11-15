@@ -476,6 +476,14 @@ function dss_elc_metrics_univariate($bundle, $field, $chart = 'bar', $metric = '
     $i = 0;
     foreach($domain_values as $key => $value) {
 
+      if($key == 'Unknown' and
+	 !in_array($field, array('field_human_gender',
+				 'field_human_occupation',
+				 'field_person_membership'))) {
+	
+	continue;
+      }
+
       //if($i > 9) {
       if($i > 3) {
 
