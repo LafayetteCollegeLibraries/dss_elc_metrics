@@ -3900,7 +3900,7 @@ function _dss_elc_metrics_network($nids, $depth = 1) {
 	$nid = $m[1];
       }
 
-      preg_match('/^(.+?)\s\(\d+\)/', $nid, $m);
+      preg_match('/^\s?"?(.+?)\s\(\d+\)/', $nid, $m);
       //$nid = $m[1] . '"';
       $nid = $m[1];
 
