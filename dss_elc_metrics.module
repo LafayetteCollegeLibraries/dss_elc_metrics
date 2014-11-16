@@ -3882,9 +3882,17 @@ function _dss_elc_metrics_network($nids, $depth = 1) {
     //! @todo Refactor
     if(!empty($nid)) {
 
+      preg_match('/(".+?)\s\(\d+\)"/', $nid, $m);
+      $nid = $m[1] . '"';
+
       // Retrieve the title
+      /*
       $query = array('entity_id:' . $nid);
       list($query, $results) = dss_elc_metrics_solr_query(array('*'), $query, 1);
+      */
+
+      $query = array('label:' . $nid);
+      list($query, $results) = dss_elc_metrics_solr_query(array('human'), $query, 1);
 
       $node_docs = $results->response->docs;
       $node_doc = array_shift($node_docs);
@@ -4456,10 +4464,13 @@ function dss_elc_metrics_get_network_ajax() {
 
 	$subject_nids = array();
 
-	foreach(preg_split('/\)/', $data['subject_nids']) as $value) {
+	//foreach(preg_split('/\)/', $data['subject_nids']) as $value) {
+	foreach(preg_split('/"\s?,/', $data['subject_nids']) as $value) {
 
-	  preg_match('/\((\d+)/', $value, $matches);
-	  $subject_nids[] = $matches[1];
+	  //preg_match('/\((\d+)/', $value, $matches);
+	  //$subject_nids[] = $matches[1];
+
+	  $subject_nids[] = $value;
 	}
 
 	$data['subject_nids'] = $subject_nids;
