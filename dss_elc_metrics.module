@@ -3604,10 +3604,12 @@ function dss_elc_metrics_network_explore($node, $depth, &$network,
 
     // Retrieve the loans/authorships related to this node
     // (Yields Items)
-    $query = array('(sm_field_bib_rel_subject:"node:' . $node->nid . '" OR sm_field_loan_shareholder:"node:' . $node->nid . '")');
+    //$query = array('(sm_field_bib_rel_subject:"node:' . $node->nid . '" OR sm_field_loan_shareholder:"node:' . $node->nid . '")');
+    $query = array('sm_field_bib_rel_subject:"node:' . $node->nid . '" OR sm_field_loan_shareholder:"node:' . $node->nid . '"');
 
     //list($query, $results) = dss_elc_metrics_solr_query(array('loan', 'authorship'), $query, 1000000);
-    list($query, $results) = dss_elc_metrics_solr_query(array('loan', 'authorship'), $query, $row, false, array(), array(), $sort);
+    //list($query, $results) = dss_elc_metrics_solr_query(array('loan', 'authorship'), $query, $row, false, array(), array(), $sort);
+    list($query, $results) = dss_elc_metrics_solr_query(array('*'), $query, $row, false, array(), array(), $sort);
 
     $loan_docs = $results->response->docs;
 
@@ -3795,6 +3797,8 @@ function dss_elc_metrics_network_explore($node, $depth, &$network,
 
 	if( !empty($neighbor_docs) ) {
 
+
+
 	  $neighbor_doc = array_shift($neighbor_docs);
 
 	  //$neighbor_type = $neighbor_doc->bundle;
@@ -3890,6 +3894,14 @@ function _dss_elc_metrics_network($nids, $depth = 1) {
       $query = array('entity_id:' . $nid);
       list($query, $results) = dss_elc_metrics_solr_query(array('*'), $query, 1);
       */
+      
+      // Normalize our NID
+      if(strpos($nid = htmlentities($nid, ENT_QUOTES, 'UTF-8'), '&') !== false) {
+
+	$nid = html_entity_decode(preg_replace('~&([a-z]{1,2})(?:acute|cedil|circ|grave|lig|orn|ring|slash|tilde|uml);~i', '?', $nid), ENT_QUOTES, 'UTF-8');
+	$nid = preg_match('/"(.+?)"/', $nid, $m);
+	$nid = $m[1];
+      }
 
       $query = array('label:' . $nid);
       list($query, $results) = dss_elc_metrics_solr_query(array('human'), $query, 1);
@@ -3897,7 +3909,7 @@ function _dss_elc_metrics_network($nids, $depth = 1) {
       $node_docs = $results->response->docs;
       $node_doc = array_shift($node_docs);
 
-      $node = array('nid' => $nid,
+      $node = array('nid' => $node_doc->entity_id,
 		    'type' => $node_doc->bundle,
 		    'title' => $node_doc->label);
       $node = (object) $node;
@@ -3934,7 +3946,7 @@ function _dss_elc_metrics_network($nids, $depth = 1) {
 
     foreach($edges as $neighbor => $weight) {
 
-      if(!in_array($neighbor)) {
+      if(!in_array($neighbor, $node_index)) {
 
 	$node_index[] = $neighbor;
       }
@@ -3947,7 +3959,7 @@ function _dss_elc_metrics_network($nids, $depth = 1) {
 		       );
     }
   }
-
+  
   $nodes = array();
   foreach($node_index as $node) {
 
