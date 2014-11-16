@@ -3610,8 +3610,17 @@ function dss_elc_metrics_network_explore($node, $depth, &$network,
     //list($query, $results) = dss_elc_metrics_solr_query(array('loan', 'authorship'), $query, 1000000);
     //list($query, $results) = dss_elc_metrics_solr_query(array('loan', 'authorship'), $query, $row, false, array(), array(), $sort);
     list($query, $results) = dss_elc_metrics_solr_query(array('*'), $query, $row, false, array(), array(), $sort);
-
     $loan_docs = $results->response->docs;
+
+    // Work-around
+    //! @todo Refactor and resolve
+
+    if(empty($loan_docs)) {
+
+      $query = array('(sm_field_bib_rel_subject:"node:' . $node->nid . '" OR sm_field_loan_shareholder:"node:' . $node->nid . '")');
+      list($query, $results) = dss_elc_metrics_solr_query(array('*'), $query, $row, false, array(), array(), $sort);
+      $loan_docs = $results->response->docs;
+    }
 
     foreach($loan_docs as $loan_doc) {
 
