@@ -37,8 +37,37 @@ function dss_elc_metrics_drush_command() {
 			      ),
 	  'aliases' => array(''));
 
+  $items['elc-metrics-report'] =
+    array('description' => dt('Generate a report containing the loan metrics for the Easton Library Company Project loan records'),
+	  'arguments' => array('arg1' => dt(''),
+			       ),
+	  'examples' => array(
+			      'Standard example' => 'drush dss-elc-metrics-solr-index-nodes',
+			      ),
+	  'aliases' => array(''));
+
   return $items;
   }
+
+
+
+function drush_dss_elc_metrics_elc_metrics_report() {
+
+  module_load_include('inc', 'dss_elc_metrics',  'includes/report');
+
+  /**
+   * Retrieve the following:
+   * loans per "decade" grouped by subject
+   * filtered for the following decades: 1811-1819 (normalized to 1810 - 1819), 1820-1829, 1830-1839
+   * filtered for the following subjects: fiction, biography, history, travel, belles-lettres
+   *
+   */
+
+  $report = dss_elc_metrics_report();
+
+  //drush_log(dt('trace: '), 'ok');
+  print $report;
+}
 
 function drush_dss_elc_metrics_solr_index_node($nid, $env_id = 'solr') {
 
