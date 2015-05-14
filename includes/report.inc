@@ -263,7 +263,7 @@ function dss_elc_metrics_report($bundles = array('loan','item'),
   $query = new EntityFieldQuery();
   $entities = $query->entityCondition('entity_type', 'node', '=')
     ->entityCondition('bundle', 'loan')
-    ->range(0, 2000)
+    ->range(0, 32000)
     ->execute();
   $entities_u = node_load_multiple(array_keys($entities['node']));
 
@@ -299,9 +299,12 @@ function dss_elc_metrics_report($bundles = array('loan','item'),
 
     if(in_array($field_u, $date_fields)) {
 
-      if(preg_match('/^\d+$/', $bin_value)) {
+      if(preg_match('/^\-?\d+$/', $bin_value)) {
 
-	$date_value = DateTime::createFromFormat('U', $bin_value);
+	//$date_value = DateTime::createFromFormat('U', $bin_value);
+
+	$datestamp = gmdate("Y-m-d\TH:i:s\Z", $bin_value);
+	$date_value = new DateTime($datestamp);
       } else {
 
 	$date_value = new DateTime($bin_value);
@@ -351,33 +354,33 @@ function dss_elc_metrics_report($bundles = array('loan','item'),
       // If a filter has been applied...
       if(!is_null($field_v_groups_filter)) {
 
-      // Filter the terms
-      // (Easier than a map->reduce)
-      $is_filtered = FALSE;
-      foreach($field_v_groups_filter as $filter_term) {
-
-	$is_filtered = $is_filtered || (bool) preg_match("/^$filter_term/", $term->name);
-      }
-
-      if($is_filtered) {
-
-	$field_v_groups[$bin_label][$term->name] += 1;
-	$field_u_grouped_bins[$bin_label . " ({$term->name})"] += 1;
-      }
+	// Filter the terms
+	// (Easier than a map->reduce)
+	$is_filtered = FALSE;
+	foreach($field_v_groups_filter as $filter_term) {
+	  
+	  $is_filtered = $is_filtered || (bool) preg_match("/^$filter_term/", $term->name);
+	}
+	
+	if($is_filtered) {
+	  
+	  $field_v_groups[$bin_label][$term->name] += 1;
+	  $field_u_grouped_bins[$bin_label . " ({$term->name})"] += 1;
+	}
       } else {
-
+	
 	$field_v_groups[$bin_label][$term->name] += 1;
 	$field_u_grouped_bins[$bin_label . " ({$term->name})"] += 1;
       }
     } elseif( !empty($values) ) {
-
+      
       $value = $values[0]['value'];
-
+      
       $field_v_groups[$bin_label][$value] += 1;
-      $field_u_grouped_bins[$bin_label . " ({ $value })"] += 1;
+      $field_u_grouped_bins[$bin_label . " ($value)"] += 1;
     }
   }
-
+  
   // Limit the number of groups for field v using an arbitrary ceiling
   if(!is_null($field_v_groups_limit)) {
 
@@ -391,8 +394,8 @@ function dss_elc_metrics_report($bundles = array('loan','item'),
 
   if( is_null($csv_file_path) ) {
 
-    $report = implode(',', array_keys($field_v_groups)) . "\n";
-    $report .= implode(',', array_values($field_v_groups));
+    $report = implode(',', array_keys( $field_u_bins )) . "\n";
+    $report .= implode(',', array_values( $field_u_bins ));
   } else {
 
     // Write to the CSV-formatted file
