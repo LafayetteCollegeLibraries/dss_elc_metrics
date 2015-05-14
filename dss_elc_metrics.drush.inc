@@ -42,14 +42,59 @@ function dss_elc_metrics_drush_command() {
 	  'arguments' => array('arg1' => dt(''),
 			       ),
 	  'examples' => array(
-			      'Standard example' => 'drush dss-elc-metrics-solr-index-nodes',
+			      'Standard example' => '',
+			      ),
+	  'aliases' => array(''));
+
+  $items['elc-metrics-report-ext'] =
+    array('description' => dt('Generate a report containing the metrics for the Easton Library Company Project loan records'),
+	  'arguments' => array('arg1' => dt(''),
+			       ),
+	  'examples' => array(
+			      'Standard example' => '',
+			      ),
+	  'aliases' => array(''));
+
+  $items['elc-metrics-report-ext-2'] =
+    array('description' => dt('Generate a report containing the metrics for the Easton Library Company Project loan records'),
+	  'arguments' => array('arg1' => dt(''),
+			       ),
+	  'examples' => array(
+			      'Standard example' => '',
 			      ),
 	  'aliases' => array(''));
 
   return $items;
   }
 
+function drush_dss_elc_metrics_elc_metrics_report_ext_2() {
 
+  module_load_include('inc', 'dss_elc_metrics',  'includes/report');
+
+  $report = dss_elc_metrics_report_univar(
+					  array('loan','item'),
+					  'field_artifact_title',
+					  NULL,
+					  20
+					  );
+
+  print $report;
+}
+
+function drush_dss_elc_metrics_elc_metrics_report_ext() {
+
+  module_load_include('inc', 'dss_elc_metrics',  'includes/report');
+
+  $report = dss_elc_metrics_report(
+				   array('loan','item'),
+				   'field_loan_duration',
+				   'field_artifact_title',
+				   NULL,
+				   10
+				   );
+
+  print $report;
+}
 
 function drush_dss_elc_metrics_elc_metrics_report() {
 
