@@ -205,8 +205,11 @@ function dss_elc_metrics_datatables_query($bundles, $request, $filter_query = NU
   $url = variable_get('apachesolr_host', 'localhost');
 
   $solr = new DrupalApacheSolrService('http://santorini0.stage.lafayette.edu:8080/solr' . '/' . 'elc');
-  $solr_field_map = array('loan' => array('sort_field_loan_shareholder_label',
+  $solr_field_map = array('loan' => array(
+
+					  //'sort_field_loan_shareholder_label',
 					  'sort_field_bib_rel_subject_label',
+					  'sort_field_loan_shareholder_label',
 					  'is_field_loan_duration_value',
 					  'sort_field_bib_rel_object_label',
 					  'is_field_loan_volumes_loaned_first',
