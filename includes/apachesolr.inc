@@ -104,13 +104,13 @@ function dss_elc_metrics_solr_query($bundles, $query, $rows = 10, $facet = FALSE
 
   $query_string = $bundle_query;
 
-  print_r($query);
+  //print_r($query);
 
   if(!empty($query) ) {
 
     $query_string .= ' AND ';
   }
-  $query_string .= implode( array(' AND ', $query));
+  $query_string .= implode(' AND ', $query);
 
   // Handling for sorting
   
@@ -166,7 +166,7 @@ function dss_elc_metrics_solr_query($bundles, $query, $rows = 10, $facet = FALSE
   $query_name = implode('_', array('dss_elc_metrics', 'solr', $first_bundle, $query_string, $facet, $facets, $sort, $page));
   //$query_name = preg_replace('/\s/', '_', $query_name);
 
-  print_r($params);
+  //print_r($params);
   $query = apachesolr_drupal_query($query_name, $params, $sort, '', $solr);
 
   // Work-around for the apachesolr Module

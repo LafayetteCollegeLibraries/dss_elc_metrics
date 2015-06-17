@@ -3584,7 +3584,7 @@ function dss_elc_metrics_network_explore($node, $depth, &$network,
 						       3 => 3,
 						       4 => 1),
 					 $sort = 'ds_created asc') {
-  
+
   // Terminal condition for the recursion
   if($depth == 0) {
 
@@ -3609,6 +3609,7 @@ function dss_elc_metrics_network_explore($node, $depth, &$network,
 
     //list($query, $results) = dss_elc_metrics_solr_query(array('loan', 'authorship'), $query, 1000000);
     //list($query, $results) = dss_elc_metrics_solr_query(array('loan', 'authorship'), $query, $row, false, array(), array(), $sort);
+
     list($query, $results) = dss_elc_metrics_solr_query(array('*'), $query, $row, false, array(), array(), $sort);
     $loan_docs = $results->response->docs;
 
@@ -3921,7 +3922,8 @@ function _dss_elc_metrics_network($nids, $depth = 1) {
 	}
       }
 
-      $query = array('label:' . $nid);
+      $query = array('label:"' . $nid . '"');
+
       list($query, $results) = dss_elc_metrics_solr_query(array('human'), $query, 1);
 
       $node_docs = $results->response->docs;
