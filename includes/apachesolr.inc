@@ -109,7 +109,7 @@ function dss_elc_metrics_solr_query($bundles, $query, $rows = 10, $facet = FALSE
 
     $query_string .= ' AND ';
   }
-  $query_string .= implode( array(' AND ', $query));
+  $query_string .= implode(' AND ', $query);
 
   // Handling for sorting
   
