@@ -1397,7 +1397,8 @@ function dss_elc_metrics_cache_get_domains($mongo_id) {
   return $domains;
 }
 
-function dss_elc_metrics_cache($mongo_id, $collection_name='dss_elc_metrics', $data=NULL) {
+/*
+function dss_elc_metrics_cache_($mongo_id, $collection_name='dss_elc_metrics', $data=NULL) {
 
   $collection = mongodb_collection($collection_name);
 
@@ -1425,6 +1426,7 @@ function dss_elc_metrics_cache($mongo_id, $collection_name='dss_elc_metrics', $d
 
   return $data;
 }
+*/
 
 /**
  * @abstract
@@ -3270,300 +3272,6 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $c
   return $response;
 }
 
-function _dss_elc_metrics_bivariate_deprecated($bundle_u, $field_u, $bundle_v, $field_v, $chart = 'bar', $metric_u = 'sum', $metric_v = 'sum') {
-
-  /*
-  // Refactor
-  // Label mapping
-  $info_u = field_info_instance('node', $field_u, $field_u == 'field_loan_duration' ? 'loan' : 'item');
-  $info_v = field_info_instance('node', $field_v, 'human');
-
-  $y_axis = array('label' => 'Loans',
-		  'type' => 'ratio',
-		  'axis' => 'y');
-
-  // Refactor
-  if(true) {
-
-    $y_axis['property'] = 'value';
-  }
-  */
-
-  // Wrap the Object with the appropriate metadata
-  /*
-  return array('data' => $output,
-	       'metrics' => $metrics,
-	       'metadata' => array('x' => array('label' => $info_u['label'],
-						'property' => 'domain',
-						'type' => $scale_type ? $scale_type : 'nominal',
-						'axis' => 'x'),
-				   'y' => $y_axis)
-	       );
-  */
-  
-  /**
-   * Find all U entities related to V entities through relation R
-   * This should be a simple SPARQL query, but ARC2 doesn't support PostgreSQL
-   *
-   */
-
-  // First, retrieve every entity with this relationship
-
-  // Retrieve all bundles from the ELC database sorted by the values for the field
-  $query = db_select('node', 'n');
-
-  $query->join("field_data_field_bib_rel_object", 'bib_rel_object', 'bib_rel_object.field_bib_rel_object_target_id=n.nid'); // Retrieve all field records for all NID's specified in the book loan records
-  $query->join('node', 'loan', 'loan.nid=bib_rel_object.entity_id'); // Retrieve all related loan records
-  $query->join("field_data_field_bib_rel_subject", 'bib_rel_subject', 'bib_rel_subject.entity_id=loan.nid'); // Retrieve all borrowers
-  $query->join("field_data_field_loan_duration", 'loan_duration', 'loan_duration.entity_id=loan.nid'); // Retrieve the duration of the loan
-
-  $query->condition('loan.type', 'loan', '=');
-  $query->fields('bib_rel_object', array('field_bib_rel_object_target_id'));
-  $query->fields('bib_rel_subject', array('field_bib_rel_subject_target_id'));
-  $query->fields('loan_duration', array('field_loan_duration_value', 'field_loan_duration_value2'));
-
-  /**
-   * Need limited data set for testing
-   * @todo Disable
-   */
-  $query->range(0,100);
-  $records = $query->execute();
-
-  $index = array();
-  $json_record_values = array();
-
-  /*
-    $info = field_info_instance($entity_type, $field_name, $bundle_name);
-
-    $label = $info['label'];
-   */
-
-  foreach($records as $record) {
-
-    $_object = node_load($record->field_bib_rel_object_target_id);
-
-    // If this is a manifestation, retrieve the original work
-    if($_object->type == 'manifestation') {
-
-      $entity_query = new EntityFieldQuery();
-      $entity_query->entityCondition('entity_type', 'node');
-      $entity_query->fieldCondition('field_item_embodies', 'target_id', $_object->nid, '=');
-      $entities = $entity_query->execute();
-
-      $_object = node_load(array_pop(array_keys($entities['node'])));
-    }
-
-    // Refactor
-    if($field_u != 'field_loan_duration') {
-
-      $_field_u = $_object->$field_u;
-    }
-
-    $_subject = node_load($record->field_bib_rel_subject_target_id);
-
-    /**
-     * @note Handling for List fields
-     * Book/Periodical/Item: field_item_format
-     * Human: field_human_gender
-     *
-     */
-     $_field_v = $_subject->$field_v;
-
-    // Refactor
-    if(empty($_subject->$field_v)) {
-
-      $_sample_name = 'Unknown';
-    } else {
-      
-      if($field_v == 'field_human_gender') {
-
-	$_field = field_info_field($field_v);
-	$_values = list_allowed_values($_field);
-	$_sample_name = array_pop($_field_v['und']);
-	$_sample_name = $_values[$_sample_name['value']];
-      } elseif($field_v == 'field_person_location' ||
-	       $field_v == 'field_person_membership') {
-	
-	$entity_id = array_pop($_field_v['und']);
-	$entity = node_load($entity_id['target_id']);
-	
-	$_sample_name = $entity->title;
-      }
-    }
-    
-    // For NULL List field values
-    if(!$_sample_name) {
-      
-      $_sample_name = 'Unknown';
-    }
-
-    // Term Reference fields
-    // Refactor for array
-    if($field_u == 'field_human_occupation' ||
-       $field_u == 'field_person_type' ||
-       $field_u == 'field_item_subject' ||
-       $field_u == 'field_artifact_type') {
-      
-      // For the handling of NULL values
-      if(!$_field_u) {
-	
-	$_field_u = array('und' => array('Unknown'));
-      }
-      
-      foreach($_field_u['und'] as $term) {
-	  
-	if(!array_key_exists('tid', $term)) {
-	  
-	  $domain = 'Unknown';
-	} else {
-
-	  $term = taxonomy_term_load($term['tid']);
-	  $domain = $term->name;
-	}
-
-	if(!array_key_exists($domain, $json_record_values)) {
-
-	  $json_record_values[$domain] = array($_sample_name => 1);	  
-	} else {
-	  
-	  $json_record_values[$domain][$_sample_name]++;
-	}
-      }
-    } elseif($field_u == 'field_artifact_was_authored_by') { // Entity References
-      
-      $entity_id = array_pop($_field_u['und']);
-      $entity = node_load($entity_id['target_id']);
-      
-      $domain = $entity->field_person_name['und'][0]['value'];
-      
-      // Refactor
-      if(!array_key_exists($domain, $json_record_values)) {
-	
-	$json_record_values[$domain] = array($_sample_name => 1);
-      } else {
-	
-	$json_record_values[$domain][$_sample_name]++;
-      }
-    } elseif($field_u == 'field_item_format') { // Refactor
-
-      $_field = field_info_field($field_u);
-      $_values = list_allowed_values($_field);
-      $_domain = array_pop($_field_u['und']);
-      $domain = $_values[$_domain['value']];
-
-      // For NULL values
-      if(!$domain) {
-
-	$domain = 'Unknown';
-      }
-
-      // Refactor
-      if(!array_key_exists($domain, $json_record_values)) {
-	
-	$json_record_values[$domain] = array($_sample_name => 1);
-      } else {
-	
-	$json_record_values[$domain][$_sample_name]++;
-      }
-    } elseif($field_u == 'field_loan_duration') { // Loan duration
-
-      // Parse from a UNIX timestamp
-      $domain = $record->field_loan_duration_value;
-      $date = new DateObject($domain);
-      $domain = $date->format('Ymd');
-
-      // Refactor
-      if(!array_key_exists($domain, $json_record_values)) {
-	
-	$json_record_values[$domain] = array($_sample_name => 1);
-      } else {
-	
-	$json_record_values[$domain][$_sample_name]++;
-      }
-
-      // Also, set the type of scale to "temporal"
-      $scale_type = 'temporal';
-    }
-  }
-
-  $metrics = array();
-
-  // Apply a linear transform for D3
-  $output = array();
-  foreach($json_record_values as $domain => $samples) {
-
-    $sample_values = array();
-    
-    foreach($samples as $sample => $qty) {
-      
-      $sample_values[] = array('sample' => $sample,
-			       'value' => $qty);
-
-      $metrics[$sample] = array('sample' => $sample,
-				'aMean' => mt_rand() / mt_getrandmax(),
-				'median' => '{ ' . (string) (mt_rand() / mt_getrandmax()) . ' }',
-				'mode' => mt_rand() / mt_getrandmax(),
-				'kurtosisPearson' => mt_rand() / mt_getrandmax(),
-				'kurtosisFisher' => mt_rand() / mt_getrandmax(),
-				'distribution' => 'Poisson');
-    }
-
-    // Refactor
-    if($field_u == 'field_loan_duration') {
-     
-      // Work-around
-      $output[] = array('domain' => (string) $domain,
-			'values' => $sample_values);
-    } else {
-
-      $output[] = array('domain' => $domain,
-			'values' => $sample_values);
-    }
-  }
-
-  // Refactor
-  // Label mapping
-  $info_u = field_info_instance('node', $field_u, $field_u == 'field_loan_duration' ? 'loan' : 'item');
-  $info_v = field_info_instance('node', $field_v, 'human');
-
-  $y_axis = array('label' => 'Loans',
-		  'type' => 'ratio',
-		  'axis' => 'y');
-
-  // Refactor
-  //if($field_u != 'field_loan_duration') {
-  if(true) {
-
-    $y_axis['property'] = 'value';
-  }
-
-  /*
-	    var metrics = { 'sampleA' : {
-
-		    sample: 'sampleA',
-		    aMean: 3.45,
-		    median: '{ ' + 4.56 + ' }',
-		    mode: 7.68,
-		    kurtosisPearson: 2.345,
-		    kurtosisFisher: -1,
-		    distribution: 'Poisson'
-		},
-			    'sampleB' : {
-
-			    },
-	    };
-   */
-
-  // Wrap the Object with the appropriate metadata
-  return array('data' => $output,
-	       'metrics' => $metrics,
-	       'metadata' => array('x' => array('label' => $info_u['label'],
-						'property' => 'domain',
-						'type' => $scale_type ? $scale_type : 'nominal',
-						'axis' => 'x'),
-				   'y' => $y_axis)
-	       );
-}
 
 function dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $chart, $metric) {
   
@@ -4003,363 +3711,6 @@ function _dss_elc_metrics_network($nids, $depth = 1) {
   //return array();
 }
 
-function _dss_elc_metrics_network_deprecated($relationship_bundle, $nids, $min=NULL, $max=NULL) {
-  
-  if($relationship_bundle == 'loan') {
-
-    $mongo_id = json_encode($nids);
-    $collection_name = 'dss_elc_metrics_loans';
-
-    /**
-     * @todo Integrate
-     */
-    //$loan_entities = dss_elc_metrics_cache_get($mongo_id, $collection_name);
-    $loan_entities = NULL;
-
-    if(!isset($loan_entities)) {
-
-      // Cache the loans fetched for any given subject
-      $entity_query = new EntityFieldQuery();
-      $entity_query->entityCondition('entity_type', 'node');
-      $entity_query->entityCondition('bundle', 'loan');
-      $entity_query->fieldCondition('field_bib_rel_subject', 'target_id', $nids, 'IN');
-
-      if(isset($max)) {
-
-	if($max < 0) {
-
-	  $min_date = date('c', $min);
-	  $max_date = date('c', $max);
-
-	  $entity_query->fieldCondition('field_loan_duration', 'value', array((int) $max, (int) $min), 'BETWEEN');
-	} else {
-
-	  $entity_query->range((int) $min - 1, (int) $max);
-	}
-      }
-
-      $entities = $entity_query->execute();
-      $loan_entities = node_load_multiple(array_keys($entities['node']));
-
-      //print json_encode($loan_entities);
-
-      /**
-       * @todo Integrate
-       */
-      //dss_elc_metrics_cache_set($mongo_id, json_encode($loan_entities), $collection_name);
-    }
-
-    // Avoid confusing Drupal "nodes" with network nodes
-    $vertices = array();
-    $indexed_edges = array();
-
-    // Refactor
-    $indexed_vertex_ids = array();
-
-    foreach($loan_entities as $loan_entity) {
-
-      if(isset($min_date) and isset($max_date)) {
-	
-	/**
-	 * Work-around
-	 * This will become unnecessary after integrating with DateTime
-	 *
-	 */
-	if((float) $loan_entity->field_loan_duration_value < (float) $min_date ||
-	   (float) $loan_entity->field_loan_duration_value > (float) $max_date) {
-
-	  //continue;
-	}
-      }
-
-      $lang = $loan_entity->language;
-
-      /*
-      $_object = $loan_entity->field_bib_rel_object->$lang;
-      $_object = node_load(intval($_object[0]->target_id));
-      */
-      $_object = $loan_entity->field_bib_rel_object[$lang];
-      $_object = node_load(intval($_object[0]['target_id']));
-
-      // If this is a manifestation, retrieve the original work
-      if($_object->type == 'manifestation') {
-	
-	$entity_query = new EntityFieldQuery();
-	$entity_query->entityCondition('entity_type', 'node');
-	$entity_query->fieldCondition('field_item_embodies', 'target_id', $_object->nid, '=');
-	$entities = $entity_query->execute();
-	
-	$_object = node_load(array_pop(array_keys($entities['node'])));
-      }
-
-      /*
-      $_subject = $loan_entity->field_bib_rel_subject->$lang;
-      $_subject = node_load(intval($_subject[0]->target_id));
-      */
-      $_subject = $loan_entity->field_bib_rel_subject[$lang];
-      $_subject = node_load(intval($_subject[0]['target_id']));
-      
-      // Refactor
-      if(!array_key_exists($_subject->nid, $indexed_vertex_ids)) {
-	
-	$vertices[] = array('label' => $_subject->title,
-			    'type' => $_subject->type);
-	
-	$indexed_vertex_ids[$_subject->nid] = sizeof($vertices) - 1;
-      }
-      
-      // Refactor
-      if(!array_key_exists($_object->nid, $indexed_vertex_ids)) {
-	
-	$vertices[] = array('label' => $_object->title,
-			    'type' => $_object->type);
-	
-	$indexed_vertex_ids[$_object->nid] = sizeof($vertices) - 1;
-      }
-      
-      if(!array_key_exists($_subject->nid, $indexed_edges)) {
-	
-	$indexed_edges[$_subject->nid] = array($_object->nid => array('source' => $indexed_vertex_ids[$_subject->nid],
-								      //'target' => $subject_vertex_id + 1,
-								      //'target' => sizeof($vertices),
-								      'target' => $indexed_vertex_ids[$_object->nid],
-								      'weight' => 1,
-								      'type' => 'borrowedBy'));
-	
-      } elseif(!array_key_exists($_object->nid, $indexed_edges[$_subject->nid])) {
-	
-	$indexed_edges[$_subject->nid][$_object->nid] = array(//'source' => $subject_vertex_id,
-							      'source' => $indexed_vertex_ids[$_subject->nid],
-							      //'target' => $subject_vertex_id + 1,
-								//'target' => sizeof($vertices),
-							      'target' => $indexed_vertex_ids[$_object->nid],
-							      'weight' => 1,
-							      'type' => 'borrowedBy');
-      } else {
-	
-	// Increase the weight for more than one loan for any given work
-	$indexed_edges[$_subject->nid][$_object->nid]['weight']++;
-      }
-    }
-  } elseif($relationship_bundle == 'personal_relationship') {
-
-    $mongo_id = json_encode($nids);
-    $collection_name = 'dss_elc_metrics_loans';
-
-    /**
-     * @todo Integrate
-     */
-    //$pers_rel_entities = dss_elc_metrics_cache_get($mongo_id, $collection_name);
-    $pers_rel_entities = NULL;
-
-    if(!isset($pers_rel_entities)) {
-
-      // Cache the loans fetched for any given subject
-      $entity_query = new EntityFieldQuery();
-      $entity_query->entityCondition('entity_type', 'node');
-      $entity_query->entityCondition('bundle', 'personal_relationship');
-      $entity_query->fieldCondition('field_pers_rel_subject', 'target_id', $nids, 'IN');
-
-      if(isset($max)) {
-
-	$entity_query->range((int) $min - 1, (int) $max);
-      }
-      
-      $entities = $entity_query->execute();
-      $pers_rel_entities = node_load_multiple(array_keys($entities['node']));
-
-      /**
-       * @todo Integrate
-       */
-      //dss_elc_metrics_cache_set($mongo_id, json_encode($pers_rel_entities), $collection_name);
-    }
-
-    // Avoid confusing Drupal "nodes" with network nodes
-    $vertices = array();
-    $indexed_edges = array();
-
-    // Refactor
-    $indexed_vertex_ids = array();
-
-    foreach($pers_rel_entities as $pers_rel_entity) {
-
-      $lang = $pers_rel_entity->language;
-
-      /*
-      $_object = $pers_rel_entity->field_pers_rel_object->$lang;
-      $_object = node_load(intval($_object[0]->target_id));
-      */
-      $_object = $pers_rel_entity->field_pers_rel_object[$lang];
-      $_object = node_load(intval($_object[0]['target_id']));
-
-      // If this is a manifestation, retrieve the original work
-      if($_object->type == 'manifestation') {
-	
-	$entity_query = new EntityFieldQuery();
-	$entity_query->entityCondition('entity_type', 'node');
-	$entity_query->fieldCondition('field_item_embodies', 'target_id', $_object->nid, '=');
-	$entities = $entity_query->execute();
-	
-	$_object = node_load(array_pop(array_keys($entities['node'])));
-      }
-
-      /*
-      $_subject = $pers_rel_entity->field_pers_rel_subject->$lang;
-      $_subject = node_load(intval($_subject[0]->target_id));
-      */
-      $_subject = $pers_rel_entity->field_pers_rel_subject[$lang];
-      $_subject = node_load(intval($_subject[0]['target_id']));
-
-      /**
-       * Load the term for the role within the personal relationship
-       */
-      $role_term = taxonomy_term_load($pers_rel_entity->field_pers_rel_role[$lang][0]['tid']);
-      
-      // Refactor
-      if(!array_key_exists($_subject->nid, $indexed_vertex_ids)) {
-
-	/**
-	 * For personal relationships, a more granular type of node is specified.
-	 */
-	$vertices[] = array('label' => $_subject->title,
-			    //'type' => $_subject->type
-			    'type' => $role_term->name
-			    );
-	
-	$indexed_vertex_ids[$_subject->nid] = sizeof($vertices) - 1;
-      }
-      
-      // Refactor
-      if(!array_key_exists($_object->nid, $indexed_vertex_ids)) {
-	
-	/**
-	 * For personal relationships, a more granular type of node is specified.
-	 */
-	$vertices[] = array('label' => $_object->title,
-			    //'type' => $_object->type
-			    'type' => 'Shareholder'
-			    );
-	
-	$indexed_vertex_ids[$_object->nid] = sizeof($vertices) - 1;
-      }
-
-      if(!array_key_exists($_subject->nid, $indexed_edges)) {
-	
-	$indexed_edges[$_subject->nid] = array($_object->nid => array('source' => $indexed_vertex_ids[$_subject->nid],
-								      //'target' => $subject_vertex_id + 1,
-								      //'target' => sizeof($vertices),
-								      'target' => $indexed_vertex_ids[$_object->nid],
-								      'weight' => 1,
-								      'type' => $role_term->name));
-	
-      } elseif(!array_key_exists($_object->nid, $indexed_edges[$_subject->nid])) {
-	
-	$indexed_edges[$_subject->nid][$_object->nid] = array(//'source' => $subject_vertex_id,
-							      'source' => $indexed_vertex_ids[$_subject->nid],
-							      //'target' => $subject_vertex_id + 1,
-								//'target' => sizeof($vertices),
-							      'target' => $indexed_vertex_ids[$_object->nid],
-							      'weight' => 1,
-							      'type' => $role_term->name);
-      } else {
-	
-	// Increase the weight for more than one loan for any given work
-	$indexed_edges[$_subject->nid][$_object->nid]['weight']++;
-      }
-    }
-  }
-
-  $edges = array();
-  
-  // Flatten the array for D3
-  foreach($indexed_edges as $subject_nid => $value) {
-    
-    foreach($value as $object_nid => $edge) {
-      
-      $edges[] = $edge;
-    }
-  }
-
-  /**
-   * Ensure that, if nothing else, the nodes for the humans are visualized
-   */
-  if(empty($vertices)) {
-
-    foreach($nids as $nid) {
-
-      $node = node_load($nid);
-      if(isset($node->title)) {
-
-	$vertices[] = array('label' => $node->title,
-			    'type' => 'human');
-      }
-    }
-  }
-
-  /**
-   *
-   * Fixtures for development
-   * @todo Remove for testing
-   */
-
-  if($relationship_bundle == 'personal_relationship') {
-
-    $vertices[] = array('label' => '(Son)',
-			'type' => 'Child');
-    $edges[] = array('source' => count($vertices) - 1,
-		     'target' => 0,
-		     'weight' => 1,
-		     'type' => 'isChildOf');
-
-    $vertices[] = array('label' => '(Mother)',
-			'type' => 'Parent');
-    $edges[] = array('source' => count($vertices) - 1,
-		     'target' => 0,
-		     'weight' => 1,
-		     'type' => 'isParentOf');
-
-    $vertices[] = array('label' => '(Father)',
-			'type' => 'Parent');
-    $edges[] = array('source' => count($vertices) - 1,
-		     'target' => 0,
-		     'weight' => 1,
-		     'type' => 'isParentOf');
-
-    $vertices[] = array('label' => '(Employee)',
-			'type' => 'Employee');
-    $edges[] = array('source' => count($vertices) - 1,
-		     'target' => 0,
-		     'weight' => 1,
-		     'type' => 'hasEmployee');
-
-    $vertices[] = array('label' => '(Servant)',
-			'type' => 'Servant');
-    $edges[] = array('source' => count($vertices) - 1,
-		     'target' => 0,
-		     'weight' => 1,
-		     'type' => 'hasServant');
-
-    $vertices[] = array('label' => '(Brother)',
-			'type' => 'Sibling');
-    $edges[] = array('source' => count($vertices) - 1,
-		     'target' => 0,
-		     'weight' => 1,
-		     'type' => 'isSiblingOf');
-
-    $vertices[] = array('label' => 'First Presbyterian Church',
-			'type' => 'Church');
-    $edges[] = array('source' => count($vertices) - 1,
-		     'target' => 0,
-		     'weight' => 1,
-		     'type' => 'isMemberOf');
-  }
-
-  // Wrap the Object with the appropriate metadata
-  return array('data' => array('nodes' => $vertices,
-			       'links' => $edges),
-	       'metadata' => array()
-	       );
-}
 
 /**
  * @author griffinj
@@ -4597,8 +3948,11 @@ function dss_elc_metrics_get_people($request) {
 
 	if(!$filtered_by_search) {
 
+	  $include_authors = array_key_exists('authors', $request) ? 'people_' . $request['authors'] : 'people';
+
 	  // Generate the Document pseudo-key for the MongoDB based upon the sorting parameters
-	  $mongo_key = dss_elc_metrics_views_datatables_mongo_key('views_datatables_cache', array_key_exists('authors', $request) ? 'people_' . $request['authors'] : 'people', $sort_value, $sort_dir, $start, $rows);
+	  //$mongo_key = dss_elc_metrics_views_datatables_mongo_key('views_datatables_cache', array_key_exists('authors', $request) ? 'people_' . $request['authors'] : 'people', $sort_value, $sort_dir, $start, $rows);
+	  $mongo_key = dss_elc_metrics_views_datatables_mongo_key('views_datatables_cache', $include_authors, $sort_value, $sort_dir, $start, $rows);
 
 	  // Retrieve the cached data set from the MongoDB
 	  $cached_datatable_json = $mongo_collection->findOne(array('view' => $mongo_key));
@@ -4744,7 +4098,6 @@ function _dss_elc_mongodb_get_collection($collection_name = 'views_datatables_ca
 
   $host = variable_get('dss_elc_metrics_mongodb_host', 'mongodb://santorini0.stage.lafayette.edu');
 
-  //$mongo = new Mongo($host, $options);
   $mongo = new MongoClient($host, $options);
   $mongo_db = $mongo->selectDB($db);
   $mongo_collection = $mongo_db->selectCollection($collection_name);
@@ -4817,7 +4170,7 @@ function dss_elc_metrics_get_items($request = NULL) {
 	// Extend for sorting involving start values
 	// Resolves EDDC-367
 	$start = $_GET['start'];
-	$row = $_GET['length'];
+	$rows = $_GET['length'];
 
 	list($mongo_collection, $mongo) = _dss_elc_mongodb_get_collection('views_datatables_cache');
 
@@ -4838,7 +4191,6 @@ function dss_elc_metrics_get_items($request = NULL) {
 	  // Retrieve the cached data set from the MongoDB
 	  $cached_datatable_json = $mongo_collection->findOne(array('view' => $mongo_key));
 	  if($cached_datatable_json) {
-	    //if(false) {
 
 	    $data = $cached_datatable_json['data'];
 	    $data['draw'] = intval($_GET['draw']) + 1;
@@ -5131,10 +4483,10 @@ function dss_elc_metrics_apachesolr_index_document_build($document, $entity, $en
 	}
       }
 
-
+      // is_field_loan_duration_value
       foreach(array('field_loan_duration') as $entity_field) {
 
-	if(property_exists($entity, $entity_field) and !empty($entity->{$entity_field}[$entity->language])) {
+	if(property_exists($entity, $entity_field) and !empty($entity->{$entity_field}[$entity->language]) and !empty($entity->{$entity_field}[$entity->language][0]['value']) ) {
 
 	  $document->addField("is_" . $entity_field . "_value", $entity->{$entity_field}[$entity->language][0]['value']);
 	}
@@ -5212,7 +4564,7 @@ function dss_elc_metrics_apachesolr_index_document_build($document, $entity, $en
       $document->addField('is_changed', $entity->changed);
     } else if($entity->type == 'human') {
 
-      watchdog('dss_elc_metrics', 'type constant: %title', array('%title' => $entity->title, WATCHDOG_NOTICE));
+      //watchdog('dss_elc_metrics', 'type constant: %title', array('%title' => $entity->title, WATCHDOG_NOTICE));
 
       //$document->addField("ss_label", $entity->title);
       $document->addField('is_changed', $entity->changed);
@@ -5373,7 +4725,7 @@ function dss_elc_metrics_get_loans($request = NULL) {
   // Resolves EDDC-367
   $start = $request['start'];
   
-  $row = $request['length'];
+  $rows = $request['length'];
   
   // Caching for non-filtered responses
   list($mongo_collection, $mongo) = _dss_elc_mongodb_get_collection('views_datatables_cache');
@@ -5402,12 +4754,15 @@ function dss_elc_metrics_get_loans($request = NULL) {
       //$mongo_key = 'views_datatables_cache_loans_' . $sort_value . '_' . $sort_dir . '_' . $start . '_' . $rows;
       $mongo_key = dss_elc_metrics_views_datatables_mongo_key('views_datatables_cache', 'loans', $sort_value, $sort_dir, $start, $rows);
     }
+
+    dpm('trace3');
+    dpm($mongo_key);
     
     // Retrieve the cached data set from the MongoDB
     $cached_datatable_json = $mongo_collection->findOne(array('view' => $mongo_key));
 
-    if(false) {
-    //if($cached_datatable_json) {
+    //if(false) {
+    if($cached_datatable_json) {
 
       $data = $cached_datatable_json['data'];
       $data['draw'] = intval($request['draw']) + 1;
@@ -5470,253 +4825,67 @@ function dss_elc_metrics_get_loans($request = NULL) {
   return drupal_json_output($datatable_json);
 }
 
-function dss_elc_metrics_get_loans_deprecated($request = NULL) {
-  
-  //If we are sorting by last changed date
-  if($sort_value == 'changed'){
-    //query for getting books sorted in the appropriate way
-    $query->addMetaData('account', user_load(1))
-      ->entityCondition('entity_type','node')
-      ->entityCondition('bundle','loan')
-      ->propertyOrderBy($sort_value,$_GET['order']['0']['dir']);
-    
-    $result = $query->execute();
-    
-    //load the nodes
-    $nodes = entity_load('node', array_keys($result['node']));
-    
+/**
+ * Implements hook_apachesolr_query_alter().
+ *
+ */
+function dss_elc_metrics_apachesolr_query_alter(&$query) {
+
+  if(!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
+
+    $request= $_GET;
+
+    // Required to override the paging functionality
+    //$query->page = $request['start'] / ($request['length'] / 5);
+    $query->page = $request['start'] / $request['length'];
+    //$query->addParam('rows', 1000000);
   }
-  //We are sorting by any other field 
-	else{
-		//getting a query for all loans
-		$result = $query->addMetaData('account', user_load(1))
-		->entityCondition('entity_type','node')
-		->entityCondition('bundle','loan')
-		->execute();
-		
-		//loading nodes from book query
-		$loans = entity_load('node', array_keys($result['node']));
-		
-		//sort all of the books by using $sort_value
-		
-		//case for sorting by shareholder, representative, or item title
-		if($sort_value != 'field_loan_volumes_loaned'||'field_loan_duration'){			
-			switch($sort_value){
-			
-				case 'field_loan_shareholder':	
-					usort($loans,function($a,$b){
-						$sort_node_a = entity_load('node', array($a->field_loan_shareholder['und']['0']['target_id']));
-						$sort_node_b = entity_load('node', array($b->field_loan_shareholder['und']['0']['target_id']));
-						return strcasecmp(trim($sort_node_a[$a->field_loan_shareholder['und']['0']['target_id']]->title), trim($sort_node_b[$b->field_loan_shareholder['und']['0']['target_id']]->title));
-					});
-					break;
-					
-				case 'field_bib_rel_subject' :
-					usort($loans,function($a,$b){
-						$sort_node_a = entity_load('node', array($a->field_bib_rel_subject['und']['0']['target_id']));
-						$sort_node_b = entity_load('node', array($b->field_bib_rel_subject['und']['0']['target_id']));
-						return strcasecmp(trim($sort_node_a[$a->field_bib_rel_subject['und']['0']['target_id']]->title), trim($sort_node_b[$b->field_bib_rel_subject['und']['0']['target_id']]->title));					
-					});
-					break;
-				
-				case 'field_bib_rel_object' :
-					usort($loans,function($a,$b){
-						$sort_node_a = entity_load('node', array($a->field_bib_rel_object['und']['0']['target_id']));
-						$sort_node_b = entity_load('node', array($b->field_bib_rel_object['und']['0']['target_id']));
-						return strcasecmp(trim($sort_node_a[$a->field_bib_rel_object['und']['0']['target_id']]->title), trim($sort_node_b[$b->field_bib_rel_object['und']['0']['target_id']]->title));
-					});
-					break;	
-			}
-				
-		}
-		
-		//case for sorting by checkout date
-		if($sort_value == 'field_loan_duration'){
-			usort($loans,function($a,$b){
-				if($a->field_loan_duration['und']['0']['value'] == $b->field_loan_duration['und']['0']['value']){
-					return 0;
-				}
-				elseif($a->field_loan_duration['und']['0']['value'] > $b->field_loan_duration['und']['0']['value']){
-					return 1;
-				}
-				elseif($a->field_loan_duration['und']['0']['value'] < $b->field_loan_duration['und']['0']['value']){
-					return -1;
-				}
-			});
-		}
-
-		//case for sorting by volume
-		if($sort_value == 'field_loan_volumes_loaned'){
-			usort($loans,function($a,$b){
-				$a_vols = 0;
-				$b_vols = 0;
-				foreach($a->field_loan_volumes_loaned['und'] as $key => $value){
-					$a_vols < $value['value'] ? $a_vols = $value['value'] : $a_vols = $a_vols ;
-				}
-				foreach($b->field_loan_volumes_loaned['und'] as $key => $value){
-					$b_vols < $value['value'] ? $b_vols = $value['value'] : $b_vols = $b_vols ;
-				}
-				
-				if($a_vols == $b_vols){
-					return 0;
-				}
-				elseif($a_vols > $b_vols){
-					return 1;
-				}
-				elseif($a_vols < $b_vols){
-					return -1;
-				}
-			});	
-		}
-		
-		$nodes = $loans;
-		
-		//if it is descending, reverse the order
-		if($_GET['order']['0']['dir']=='desc'){
-			$nodes = array_reverse($nodes);
-		}
-
-	}
-
-	//empties the array of all nodes which do not contain the search value
-	
-	//searching shareholder
-	if(trim($_GET['columns']['0']['search']['value'])!=''){
-		$nodes = array_filter($nodes, function($var){
-				$shareholder_node = entity_load('node', array($var->field_loan_shareholder['und'][0]['target_id']));
-				return stristr($shareholder_node[$var->field_loan_shareholder['und'][0]['target_id']]->title, $_GET['columns']['0']['search']['value']);
-				
-		});	
-	}
-
-	//searching representative
-	if(trim($_GET['columns']['1']['search']['value'])!=''){
-
-		$nodes = array_filter($nodes,function($var){
-				
-			$representative_node = entity_load('node', array($var->field_bib_rel_subject['und'][0]['target_id']));
-			return stristr($representative_node[$var->field_bib_rel_subject['und'][0]['target_id']]->title,$_GET['columns']['1']['search']['value']);
-		
-		});
-	}
-	//searching title
-	if(trim($_GET['columns']['3']['search']['value'])!=''){
-		$nodes = array_filter($nodes,function($var){
-		
-			$item_node = entity_load('node', array($var->field_bib_rel_object['und'][0]['target_id']));
-			return stristr($item_node[$var->field_bib_rel_object['und'][0]['target_id']]->title,$_GET['columns']['3']['search']['value']);
-		
-		});
-	}
-	//searching  Vols.
-	if(trim($_GET['columns']['4']['search']['value'])!=''){
-		
-		$nodes = array_filter($nodes,function($var){
-			$found = false;
-			foreach($var->field_loan_volumes_loaned['und'] as $key => $value){
-					stristr($value['value'],$_GET['columns']['4']['search']['value']) ? $found = true : $found=$found ;
-				}
-			return $found;
-		
-		});
-	}	
-	
-	//count the number of items that are displayed witht these search values
-	$display_size = count($nodes);
-						
-	//get only the cache size worth of objects
-	$nodes = array_slice($nodes, intval($_GET['start']),intval($_GET['length']));
-	
-
-	//a query for determining the total number of results, used only for iTotalDisplayRecords and iTotalRecords These will be different once searching is implemented
-	$total_query = new EntityFieldQuery();
-	
-	//correctly formatting the JSON return object metadata
-	$datatable_json =  array(
-	    "draw" => intval($_GET['draw'])+1,
-	    "iTotalRecords" => intval($total_query
-	    	->entityCondition('entity_type','node')
-			->entityCondition('bundle','loan')
-			->count()
-			->execute()),
-	    "iTotalDisplayRecords" => $display_size,
-	    "aaData" => array() 	  
-	     );
-
-	/**
-	 * @author griffinj@lafayette.edu
-	 * Transform the data set to be parsed by DataTables
-	 *
-	 */
-
-	//correctly formatting the JSON return object aaData
-	$count = 0;
-	foreach ($nodes as $key => $value) {
-		if(isset($value)){
-			$shareholder_node = entity_load('node', array($value->field_loan_shareholder['und'][0]['target_id']));
-			$representative_node = entity_load('node', array($value->field_bib_rel_subject['und'][0]['target_id']));
-			$item_node = entity_load('node', array($value->field_bib_rel_object['und'][0]['target_id']));
-
-			/**
-			 * @author griffinj@lafayette.edu
-			 * Normalize the record (?)
-			 */
-
-			$shareholder_name = $shareholder_node[$value->field_loan_shareholder['und'][0]['target_id']]->title;
-			$representative_name = $representative_node[$value->field_loan_shareholder['und'][0]['target_id']]->title;
-			$loan_duration = $value->field_loan_duration['und']['0']['value'];
-			$item_title = $item_node[$value->field_bib_rel_object['und'][0]['target_id']]->title;
-
-			$datatable_json['aaData'][$count] = array($shareholder_name, $representative_name, $loan_duration, $item_title);
-
-			$these_vols = '';
-			
-			foreach($value->field_loan_volumes_loaned['und'] as $vol_key => $vol_value){
-				
-				if($these_vols == ''){
-					
-					$these_vols = $vol_value['value'];
-					
-				}
-				else{
-					
-					$these_vols = $these_vols . ',' . $vol_value['value'];
-					
-				}
-			}
-			array_push($datatable_json['aaData'][$count],
-			$these_vols,
-			$value->revision_timestamp,
-			$value->nid,
-			$value->nid);
-		
-		}
-		else{
-			$datatable_json['aaData'][$count] = array('');
-		}
-		$count++;
-	}
-
-	/**
-	 * @author griffinj@lafayette.edu
-	 * For extending the sorting functionality for transformed records (e. g. sorting against related Item/Book/Volume values)
-	 *
-	 */
-	$datatable_json['aaData'] = _dss_elc_metrics_items_records_sort($datatable_json['aaData'], $sort_value, $sort_dir);
-
-	/**
-	 * @author griffinj@lafayette.edu
-	 * Consistently update the MongoDB cache for cases in which the results were not filtered
-	 * @todo Invoke a hook implementation
-	 *
-	 */
-	if(!$filtered_by_search) {
-
-	  $mongo_collection->insert(array('view' => $mongo_key, 'data' => $datatable_json));
-	}
-
-
-	return drupal_json_output($datatable_json);
-	
 }
 
+/**
+ * Implements callback_queue_worker().
+ * A callback for (re)caching the metrics for the visualization interfaces
+ * 
+ */
+function dss_elc_metrics_cache($cache_update) {
+
+  drush_dss_elc_metrics_cache();
+}
+
+/**
+ * Implemented hook_cron_queue_info().
+ *
+ */
+function dss_elc_metrics_cron_queue_info() {
+
+  $queues['dss_elc_metrics'] = array('worker callback' => 'dss_elc_metrics_cache',
+				     'time' => 60 * 60
+				     );
+
+  return $queues;
+}
+
+/**
+ * Implemented hook_cron().
+ *
+ */
+function dss_elc_metrics_cron() {
+
+  // Ensure that the site metrics are queued for regenerated, at most, hourly
+  $interval = variable_get('dss_elc_metrics_cron_interval', 60 * 60);
+
+  if (time() >= variable_get('dss_elc_metrics_cron_next_run', 0)) {
+
+    $queue = DrupalQueue::get('dss_elc_metrics');
+    $cache_update = new stdClass();
+    $cache_update->created = time();
+  
+    if($queue->createItem($cache_update)) {
+
+      watchdog('dss_elc_metrics', 'metrics cache update pending');
+    }
+
+    // Add timestamp to avoid queueing item more than once.
+    variable_set('dss_elc_metrics_cron_next_run', time() + $interval);
+  }
+}

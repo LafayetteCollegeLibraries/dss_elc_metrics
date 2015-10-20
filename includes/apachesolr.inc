@@ -18,7 +18,9 @@ function dss_elc_metrics_solr_query($bundles, $query, $rows = 10, $facet = FALSE
   // class_exists('Apache_Solr_Service') ?: spl_autoload_register('_search_api_solr_autoload'); // make sure that SolrPhpClient class is loaded (use only for <=rc3)
   $url = variable_get('apachesolr_host', 'localhost');
 
-  $solr = new DrupalApacheSolrService('http://santorini0.stage.lafayette.edu:8080/solr' . '/' . 'elc');
+  //$solr = new DrupalApacheSolrService('http://santorini0.stage.lafayette.edu:8080/solr' . '/' . 'elc');
+  //$solr = new DrupalApacheSolrService('http://santorini0.lafayette.edu:8080/solr' . '/' . 'elc');
+  $solr = new DrupalApacheSolrService('http://crete0.lafayette.edu:8080/solr' . '/' . 'elc');
   $solr_field_map = array('loan' => array(
 					  /*
 					  '' => 'ss_field_loan_shareholder_label',
@@ -103,9 +105,6 @@ function dss_elc_metrics_solr_query($bundles, $query, $rows = 10, $facet = FALSE
   $is_unfiltered_query = empty($query);
 
   $query_string = $bundle_query;
-
-  print_r($query);
-
   if(!empty($query) ) {
 
     $query_string .= ' AND ';
@@ -165,8 +164,6 @@ function dss_elc_metrics_solr_query($bundles, $query, $rows = 10, $facet = FALSE
   */
   $query_name = implode('_', array('dss_elc_metrics', 'solr', $first_bundle, $query_string, $facet, $facets, $sort, $page));
   //$query_name = preg_replace('/\s/', '_', $query_name);
-
-  print_r($params);
   $query = apachesolr_drupal_query($query_name, $params, $sort, '', $solr);
 
   // Work-around for the apachesolr Module
@@ -204,7 +201,8 @@ function dss_elc_metrics_datatables_query($bundles, $request, $filter_query = NU
   // class_exists('Apache_Solr_Service') ?: spl_autoload_register('_search_api_solr_autoload'); // make sure that SolrPhpClient class is loaded (use only for <=rc3)
   $url = variable_get('apachesolr_host', 'localhost');
 
-  $solr = new DrupalApacheSolrService('http://santorini0.stage.lafayette.edu:8080/solr' . '/' . 'elc');
+  //$solr = new DrupalApacheSolrService('http://santorini0.lafayette.edu:8080/solr' . '/' . 'elc');
+  $solr = new DrupalApacheSolrService('http://crete0.lafayette.edu:8080/solr' . '/' . 'elc');
   $solr_field_map = array('loan' => array(
 
 					  //'sort_field_loan_shareholder_label',
@@ -216,8 +214,8 @@ function dss_elc_metrics_datatables_query($bundles, $request, $filter_query = NU
 					  'is_changed'),
 			  'item' => array('sort_field_artifact_was_authored_by_label',
 					  'label',
-					  //'is_field_item_volume_migrate',
-					  'im_field_item_volume_migrate',
+					  'is_field_item_volume_migrate',
+					  //'im_field_item_volume_migrate',
 					  //'ss_field_artifact_type_constant',
 					  'bundle_name',
 					  //'ss_field_item_subject',
@@ -340,6 +338,9 @@ function dss_elc_metrics_datatables_query($bundles, $request, $filter_query = NU
     $sort = $solr_field . ' ' . $request['order']['0']['dir'];
   }
 
+  // For searches scoped to the site
+  $query_string .= ' AND site:"' . 'https://elc.prod.lafayette.edu/' . '"';
+
   $params = array('q' => $query_string,
 		  //'rows' => 100000,
 		  //'rows' => ($request['length'] / 5),
@@ -358,8 +359,12 @@ function dss_elc_metrics_datatables_query($bundles, $request, $filter_query = NU
   // This is the object that knows about the query coming from the user.
   $query_name = implode('_', array('views_datatables', $first_bundle, $query_string, $sort));
   $query_name = preg_replace('/s/', '_', $query_name);
-  
   $query = apachesolr_drupal_query($query_name, $params, $sort, '', $solr);
+
+  //$query = apachesolr_drupal_query('apachesolr', $params, $sort, '', $solr);
+
+  //print_r($params);
+  //exit(1);
 
   //$query->page = $request['start'] / ($request['length'] / 5);
   $query->page = $request['start'] / ($request['length']);
@@ -372,16 +377,4 @@ function dss_elc_metrics_datatables_query($bundles, $request, $filter_query = NU
   }
 
   return array($query, $solr_response);
-}
-
-function dss_elc_metrics_apachesolr_query_alter(&$query) {
-
-  if(!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
-
-    // Required to override the paging functionality
-    //$query->page = $request['start'] / ($request['length'] / 5);
-    $query->page = $request['start'] / $request['length'];
-    //$query->addParam('rows', 1000000);
-  }
-
 }

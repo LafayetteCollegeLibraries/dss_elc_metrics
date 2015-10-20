@@ -233,13 +233,13 @@ function drush_dss_elc_metrics_cache_loans($nid) {
   }  
 }
 
+
 function drush_dss_elc_metrics_cache($view = NULL, $sort_value = NULL) {
 
   // Make the request to Solr
   $request = array();
 
-  $mongo_collection = _dss_elc_mongodb_get_collection('views_datatables_cache');
-
+  list($mongo_collection, $mongo) = _dss_elc_mongodb_get_collection('views_datatables_cache');
   $view_map = array('loans' => array('fields' => array('sort_field_loan_shareholder_label',
 						       'sort_field_bib_rel_subject_label',
 						       'is_field_loan_duration_value',
@@ -254,7 +254,8 @@ function drush_dss_elc_metrics_cache($view = NULL, $sort_value = NULL) {
 						       'bundle',
 						       'sort_field_item_subject',
 						       'is_changed'),
-				     'bundles' => array('item', 'book', 'periodical')
+				     //'bundles' => array('item', 'book', 'periodical')
+				     'bundles' => array('item')
 				     ),
 		    'people' => array('fields' => array('sort_label',
 							'is_changed'),
@@ -280,36 +281,44 @@ function drush_dss_elc_metrics_cache($view = NULL, $sort_value = NULL) {
 
       foreach(array('asc', 'desc') as $sort_dir) {
 
-	$mongo_key = 'views_datatables_cache_' . $view . '_' . $sort_value . '_' . $sort_dir . '_' . 0;
+	foreach(array('50', '500') as $length) {
 
-	$request = array();
+	  $mongo_key = 'views_datatables_cache_' . $view . '_' . $sort_value . '_' . $sort_dir . '_' . 0 . '_' . $length;
 
-	$request['columns'] = array();
-	//$request['order']['0']['column'] = $sort_value;
-	$request['order']['0']['column'] = array_search($sort_value, $values['fields']);
-	$request['order']['0']['dir'] = $sort_dir;
-	$request['length'] = 50;
-	$request['start'] = 0;
+	  $request = array();
+	  
+	  $request['columns'] = array();
+	  //$request['order']['0']['column'] = $sort_value;
+	  $request['order']['0']['column'] = array_search($sort_value, $values['fields']);
+	  $request['order']['0']['dir'] = $sort_dir;
+	  $request['length'] = 50;
+	  $request['start'] = 0;
+	  
+	  // Spoof the header for AJAX handling
+	  $_SERVER['HTTP_X_REQUESTED_WITH'] = 'xmlhttprequest';
+	  
+	  set_time_limit(420);
+	  
+	  drush_log(dt('Caching the DataTables Object for the MongoDB Document ' . $mongo_key . '...'), 'ok');
+	  
+	  try {
+	    
+	    list($final_query, $solr_response) = dss_elc_metrics_datatables_query($bundles, $request);
+	    
+	    $datatable_json = dss_elc_metrics_datatables_response($solr_response, $bundles);
 
-	// Spoof the header for AJAX handling
-	$_SERVER['HTTP_X_REQUESTED_WITH'] = 'xmlhttprequest';
-
-	set_time_limit(420);
-
-	drush_log(dt('Caching the DataTables Object for the MongoDB Document ' . $mongo_key . '...'), 'ok');
-
-	list($final_query, $solr_response) = dss_elc_metrics_datatables_query($bundles, $request);
-
-	drush_log(dt('The response to the Solr query was successfully received'), 'success');
-
-	$datatable_json = dss_elc_metrics_datatables_response($solr_response, $bundles);
-	
-	// Cache the response
-	//$mongo_collection->insert(array('view' => $mongo_key, 'data' => $datatable_json));
-	$mongo_collection->update(array('view' => $mongo_key),
-				  array('view' => $mongo_key, 'data' => $datatable_json),
-				  array('upsert' => TRUE));
-	drush_log(dt('The DataTables Object was successfully cached in the MongoDB Collection ' . 'views_datatables_cache'), 'success');
+	    drush_log(dt('The response to the Solr query was successfully received'), 'success');
+	  } catch(Exception $e) {
+	    
+	    drush_log(dt('The Solr query failed: !exception', array('!exception' => $e->getMessage())), 'error');
+	  }
+	  
+	  // Cache the response
+	  $mongo_collection->update(array('view' => $mongo_key),
+				    array('view' => $mongo_key, 'data' => $datatable_json),
+				    array('upsert' => TRUE));
+	  drush_log(dt('The DataTables Object was successfully cached in the MongoDB Collection ' . 'views_datatables_cache'), 'success');
+	}
       }
     }
   }
