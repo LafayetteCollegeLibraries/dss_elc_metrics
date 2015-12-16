@@ -42,7 +42,9 @@ function dss_elc_metrics_field_constant_values() {
 
   $constant_values = array('im_field_item_format' => array('Octavo',
 							   'Quarto',
-							   'Duodecimo'));
+							   'Duodecimo'),
+                           'bm_field_book_or_periodical' => array(TRUE => 'Periodical',
+                                                                  FALSE => 'Book'));
 
   return $constant_values;
 }
@@ -1397,37 +1399,6 @@ function dss_elc_metrics_cache_get_domains($mongo_id) {
   return $domains;
 }
 
-/*
-function dss_elc_metrics_cache_($mongo_id, $collection_name='dss_elc_metrics', $data=NULL) {
-
-  $collection = mongodb_collection($collection_name);
-
-  $doc = $collection->findOne(array('_id' => $mongo_id));
-
-  if(isset($data)) {
-
-    if(!$doc || !isset($doc['data'])) {
-
-      $doc = array('_id' => $mongo_id,
-		   'cid' => $mongo_id,
-		   //'created' => REQUEST_TIME,
-		   //'expire' => $expire,
-		   //'serialized' => !$scalar,
-		   //'data' => $scalar ? $data : serialize($data),
-		   'data' => $data);
-
-      $collection->save($doc);
-    } else {
-      
-      $data = $data['data'];
-    }
-
-  }
-
-  return $data;
-}
-*/
-
 /**
  * @abstract
  * Implementing a separate MongoDB cache for the Objects generated
@@ -1613,40 +1584,12 @@ function dss_elc_metrics_related_nodes($node, $sample_field, $group) {
       }
     }
 
-  } elseif($node->type == 'human') {
-
-    /*
-    $query = new EntityFieldQuery();
-    $query->entityCondition('entity_type', 'node')
-      ->entityCondition('bundle', 'human')
-      ->propertyCondition('status', NODE_PUBLISHED)
-      //->fieldOrderBy('field_loan_duration', 'value', 'ASC')
-      //->addMetaData('account', user_load(1)); // Run the query as user 1.
-      ->range(0, 10);
-
-    $result = $query->execute();
-    */
   }
-
-  /*
-  $nodes = array();
-  if(isset($result['node'])) {
-    
-    $nids = array_keys($result['node']);
-    $nodes = entity_load('node', $nids);
-  }
-  */
-
-  //print_r($nodes);
-  //exit(1);
 
   return $related_nodes;
 }
 
 function dss_elc_metrics_sample($node, $sample_field) {
-
-  //print $sample_field;
-  //print_r($node->type);
 
   $field_sample_map = array('field_human_gender' => 'field_human_gender');
   $node_field = $field_sample_map[$sample_field];
@@ -1690,8 +1633,6 @@ function dss_elc_metrics_sample($node, $sample_field) {
   return $sample;
 }
 
-//function dss_elc_metrics_db_parse($records, $bundles, $domain_field, $sample, $sample_field, $metric = 'sum') {
-//function dss_elc_metrics_db_parse($records, $bundles, $domain_field, $sample_field, $metric = 'sum') {
 function dss_elc_metrics_db_parse($records, $sample_bundles, $sample_field, $domain_bundles, $domain_field, $metric = 'sum') {
 
   $data = array();
@@ -1710,8 +1651,6 @@ function dss_elc_metrics_db_parse($records, $sample_bundles, $sample_field, $dom
 
     //! @todo Refactor
     $group = 'Borrowers';
-
-    //print $node->nid . "\n";
 
     $related_nodes = dss_elc_metrics_related_nodes($node, $sample_field, $group);
 
@@ -1753,37 +1692,7 @@ function dss_elc_metrics_db_parse($records, $sample_bundles, $sample_field, $dom
 	      'values' => array()),
 	      )
 	)
-  */
-    
-  /**
-   * For loans, these can be analyzed in relation to the following:
-   * - Shareholder Attributes
-   *   - Name
-   *   - Gender
-   * - Representative Attributes
-   *   - Name
-   *   - Gender
-   * - Checkout Date of the Loan
-   * - Item Attributes
-   *   - Title
-   *   - Subject
-   *   - Type
-   *   - Author Attributes
-   *     - Name
-   *     - Gender
-   */
-  if(in_array('loan', $bundles)) {
-
-  } elseif(in_array('item', $bundles)) {
-
-  } elseif(in_array('human', $bundles)) {
-
-  }
-
-  foreach($records as $record) {
-
-    //print_r($record);    
-  }
+  */   
 
   if(true) {
 
@@ -2084,7 +1993,8 @@ function dss_elc_metrics_fields_solr_fields() {
   $field_solr_map = array('field_artifact_was_authored_by' => 'sm_field_artifact_was_authored_b',
 			  'field_item_subject' => 'sm_vid_Item_Subjects',
 			  'field_item_format' => 'im_field_item_format',
-			  'type' => 'bundle_name',
+			  'field_book_or_periodical' => 'bm_field_book_or_periodical',
+			  'type' => 'bm_field_book_or_periodical',
 
 			  'field_human_gender' => 'bs_field_gender',
 			  'field_person_type' => 'sm_vid_Person_Types',
@@ -3049,32 +2959,6 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $c
 	continue;
       }
 
-      //$norm_domain_values = array();
-      //$i = 0;
-
-      //$norm_values = array();
-
-      /*
-      // After sorting, slice each domain value
-      foreach($value as $domain => $range) {
-
-	print $domain;
-	exit(1);
-
-	if(count($requested_domains) < 10 and !in_array($domain, $requested_domains)) {
-
-	  $requested_domains[] = $domain;
-	  $norm_values[$domain] = $range;
-	}
-      }
-      */
-
-      //$value = $norm_values;
-
-      //! @todo Refactor for maintaining the key/value association
-      //! @todo Refactor for providing a UI component for setting the limit on the number of domains restricted
-      //if($i > 9) {
-      //if($i > 4) {
       if(count($norm_domain_values) > 1 and
 	 (count($requested_domains) > 2 or
 	  in_array($key, $requested_domains))) {
@@ -3083,15 +2967,6 @@ function _dss_elc_metrics_bivariate($bundle_u, $field_u, $bundle_v, $field_v, $c
       }
 
       $requested_domains[] = $key;
-
-      /*
-      if(count($requested_domains) < 10 and !in_array($key, $requested_domains)) {
-
-	$requested_domains[] = $key;
-	$norm_values[$key] = $value;
-      }
-      */
-
       $norm_domain_values[$key] = $value;
 
       $i++;
@@ -4661,50 +4536,9 @@ function dss_elc_metrics_get_loans($request = NULL) {
   $request = !is_null($request) ? $request : $_GET;
   $nid = array_key_exists('nid', $request) ? $request['nid'] : NULL;
 
-  //Declaring query object
+  // Declaring query object
   $query = new EntityFieldQuery();
   
-  /*
-  //choosing which column has been clicked for sorting
-  switch(intval($request['order']['0']['column'])){
-    
-  case 0://shareholder
-    //$sort_value = 'field_loan_shareholder';
-    $sort_value = 'sm_field_loan_shareholder_label';
-    break;
-    
-  case 1://representative
-    //$sort_value = 'field_bib_rel_subject';
-    $sort_value = 'sm_field_bib_rel_subject_label';
-    break;
-    
-  case 2://checkout
-    $sort_value = 'dm_field_loan_duration';
-    break;
-    
-  case 3://item title
-    //$sort_value = 'field_bib_rel_object';
-    $sort_value = 'sm_field_bib_rel_object_label';
-    break;
-    
-  case 4://vols
-    //$sort_value = 'field_loan_volumes_loaned';
-    $sort_value = 'sm_field_loan_volumes_loaned';
-    break;
-    
-  case 5://modified
-    //$sort_value = 'changed';
-    $sort_value = 'sm_changed';
-    break;
-			
-  default:
-    //$sort_value = 'title';
-    $sort_value = 'label';
-    break;
-    
-  }
-  */
-
   // Work-around for resolving field ordering within the data set for the View
   // Resolves EDDC-505
   $sort_value_map = array('sort_field_bib_rel_subject_label',
@@ -4757,14 +4591,11 @@ function dss_elc_metrics_get_loans($request = NULL) {
       $mongo_key = dss_elc_metrics_views_datatables_mongo_key('views_datatables_cache', 'loans', $sort_value, $sort_dir, $start, $rows);
     }
 
-    dpm('trace3');
-    dpm($mongo_key);
-    
     // Retrieve the cached data set from the MongoDB
     $cached_datatable_json = $mongo_collection->findOne(array('view' => $mongo_key));
 
-    //if(false) {
-    if($cached_datatable_json) {
+    if(false) {
+      //if($cached_datatable_json) {
 
       $data = $cached_datatable_json['data'];
       $data['draw'] = intval($request['draw']) + 1;
@@ -4851,7 +4682,7 @@ function dss_elc_metrics_apachesolr_query_alter(&$query) {
  */
 function dss_elc_metrics_cache($cache_update) {
 
-  drush_dss_elc_metrics_cache();
+//  drush_dss_elc_metrics_cache();
 }
 
 /**

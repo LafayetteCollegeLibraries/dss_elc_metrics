@@ -339,7 +339,7 @@ function dss_elc_metrics_datatables_query($bundles, $request, $filter_query = NU
   }
 
   // For searches scoped to the site
-  $query_string .= ' AND site:"' . 'https://elc.prod.lafayette.edu/' . '"';
+  //$query_string .= ' AND site:"' . 'https://elc.prod.lafayette.edu/' . '"';
 
   $params = array('q' => $query_string,
 		  //'rows' => 100000,
