@@ -8,8 +8,7 @@ require_once dirname(__FILE__) . '/includes/apachesolr.inc';
  */
 function dss_elc_metrics_menu() {
 
-  $items = array(
-		 'metrics' => array('page callback' => 'dss_elc_metrics_get_node_metrics_ajax',
+  $items = array('metrics' => array('page callback' => 'dss_elc_metrics_get_node_metrics_ajax',
 				    'access callback' => TRUE,
 				    ),
 		 'dss_elc_metrics/univariate' => array('page callback' => 'dss_elc_metrics_univariate_ajax',
@@ -42,7 +41,10 @@ function dss_elc_metrics_field_constant_values() {
 
   $constant_values = array('im_field_item_format' => array('Octavo',
 							   'Quarto',
-							   'Duodecimo'));
+							   'Duodecimo'),			   
+			   'bm_field_book_or_periodical' => array(FALSE => 'Periodical',
+								  TRUE => 'Book'),
+			   );
 
   return $constant_values;
 }
@@ -62,8 +64,8 @@ function dss_elc_metrics_univariate_summation($bundle, $field) {
   // If the samples have been cached, retrieve them
   $cached = $mongo_collection->findOne(array('query' => $mongo_key));
 
-  //if(false) {
-  if($cached) {
+  //if($cached) {
+  if(FALSE) {
 
     // Uncertain as to why this is necessary
     foreach ( $connections as $conn ) {
@@ -715,13 +717,7 @@ function _dss_elc_metrics_get_node_metrics_ajax($contentType = NULL, $field = NU
 
   $entities = array();
 
-  //$entities[] = dss_elc_get_node('nid', 101036);
-  //$entities[] = dss_elc_get_node('nid', 101037);
-
-  //$entities = dss_elc_get_nodes($contentType);
-
-  $FIELD_NAME_MAP = array(
-			  'gender' => 'field_human_gender',
+  $FIELD_NAME_MAP = array('gender' => 'field_human_gender',
 			  'occupation' => 'field_human_occupation',
 			  'membership' => 'field_person_membership',
 			  'location' => 'field_person_location',
@@ -732,12 +728,6 @@ function _dss_elc_metrics_get_node_metrics_ajax($contentType = NULL, $field = NU
 
     $field = $FIELD_NAME_MAP[$field];
   }
-
-  /**
-"metadata":{
-"x":{"label":"Author(s)","property":"domain","type":"nominal","axis":"x"},
-"y":{"label":"Loans","type":"ratio","axis":"y","property":"value"}}}
-   */
 
   if($contentType == 'human') {
 
@@ -1397,37 +1387,6 @@ function dss_elc_metrics_cache_get_domains($mongo_id) {
   return $domains;
 }
 
-/*
-function dss_elc_metrics_cache_($mongo_id, $collection_name='dss_elc_metrics', $data=NULL) {
-
-  $collection = mongodb_collection($collection_name);
-
-  $doc = $collection->findOne(array('_id' => $mongo_id));
-
-  if(isset($data)) {
-
-    if(!$doc || !isset($doc['data'])) {
-
-      $doc = array('_id' => $mongo_id,
-		   'cid' => $mongo_id,
-		   //'created' => REQUEST_TIME,
-		   //'expire' => $expire,
-		   //'serialized' => !$scalar,
-		   //'data' => $scalar ? $data : serialize($data),
-		   'data' => $data);
-
-      $collection->save($doc);
-    } else {
-      
-      $data = $data['data'];
-    }
-
-  }
-
-  return $data;
-}
-*/
-
 /**
  * @abstract
  * Implementing a separate MongoDB cache for the Objects generated
@@ -1576,7 +1535,6 @@ function dss_elc_metrics_related_nodes($node, $sample_field, $group) {
     $result = $query->execute();
     */
 
-    //print_r($relationships);
     // Retrieve the nodes related to $node using the $relationships
     foreach($relationships as $rel) {
 
@@ -1636,9 +1594,6 @@ function dss_elc_metrics_related_nodes($node, $sample_field, $group) {
     $nodes = entity_load('node', $nids);
   }
   */
-
-  //print_r($nodes);
-  //exit(1);
 
   return $related_nodes;
 }
@@ -2056,14 +2011,6 @@ function dss_elc_metrics_db_query($bundles) {
    * For performance reasons, single queries should be limited to 500
    */
 
-  /*
-  print_r($query);
-  $result = $query->execute();
-  print_r($result->fetchAssoc());
-
-  return $result;
-  */
-
   $nodes = array();
   if(isset($result['node'])) {
     
@@ -2084,7 +2031,8 @@ function dss_elc_metrics_fields_solr_fields() {
   $field_solr_map = array('field_artifact_was_authored_by' => 'sm_field_artifact_was_authored_b',
 			  'field_item_subject' => 'sm_vid_Item_Subjects',
 			  'field_item_format' => 'im_field_item_format',
-			  'type' => 'bundle_name',
+			  'field_book_or_periodical' => 'bm_field_book_or_periodical',
+			  'type' => 'bm_field_book_or_periodical', // Deprecated
 
 			  'field_human_gender' => 'bs_field_gender',
 			  'field_person_type' => 'sm_vid_Person_Types',
@@ -2120,7 +2068,7 @@ function dss_elc_metrics_fields_entity_reference() {
  * @todo Abstract the metrics for each axis (e. g. total number of items against average number of loans)
  *
  */
-function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $field_v) {
+function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $field_v, $repopulate_cache = FALSE) {
 
   $bundles_u = $bundle_u == 'item' ? array('item','book','periodical') : array($bundle_u);
   $bundles_v = $bundle_v == 'item' ? array('item','book','periodical') : array($bundle_v);
@@ -2132,13 +2080,21 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
   list($mongo_collection, $mongo) = _dss_elc_mongodb_get_collection('metrics_bivariate_cache_sum');
   $connections = $mongo->getConnections();
 
+  /*
+  if($field_u == 'field_loan_duration_value_0') {
+    $mongo_key = 'biv_cache_sum_' . implode('_', array($bundle_u, 'loan', $bundle_v, $field_v));
+  } else if($field_v == 'field_loan_duration_value_0') {
+    $mongo_key = 'biv_cache_sum_' . implode('_', array($bundle_u, $field_u, $bundle_v, 'loan'));
+  } else {
+    $mongo_key = 'metrics_bivariate_cache_sum_' . implode('_', array($bundle_u, $field_u, $bundle_v, $field_v));
+  }
+  */
   $mongo_key = 'metrics_bivariate_cache_sum_' . implode('_', array($bundle_u, $field_u, $bundle_v, $field_v));
 
   // If the samples have been cached, retrieve them
   $cached = $mongo_collection->findOne(array('query' => $mongo_key));
 
-  if($cached) {
-  //if(false) {
+  if(!$repopulate_cache and $cached) {
 
     // Uncertain as to why this is necessary
     foreach ( $connections as $conn ) {
@@ -2173,7 +2129,6 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
     $solr_field_sample_label_map = array('sm_field_artifact_was_authored_b' => 'Author',
 					 'sm_vid_Item_Subjects' => 'Subject',
 					 'bundle_name' => 'Type',
-
 					 'bs_field_gender' => 'Gender',
 					 'sm_vid_Person_Types' => 'Type');
 
@@ -2204,6 +2159,7 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
       // This should be iterative for multiple volumes borrowed during a single loan
       $manifest_nid = $loan_doc->sm_field_bib_rel_object;
       $query[] = 'sm_field_item_embodies:"' . $manifest_nid[0] . '"';
+
       //list($query, $results) = dss_elc_metrics_solr_query($bundles_v, $query, 1000000);
       list($query, $results) = dss_elc_metrics_solr_query(array('item', 'book', 'periodical'), $query, 1);
 
@@ -2212,7 +2168,7 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
       $item_docs = $results->response->docs;
 
       if(empty($item_docs)) {
-
+	//print "trace5\n\n";
 	continue;
       }
 
@@ -2242,6 +2198,12 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 	  $human_docs[] = $docs[0];
 	}
       }
+
+      /*
+      print "trace3\n";
+      print $bundle_v;
+      exit(1);
+      */
       
       //! @todo Refactor
       if($bundle_v == 'item') {
@@ -2293,6 +2255,8 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 	  }
 
 	  $domains[] = $domain;
+
+	  //print_r($domains);
 	}
       } elseif($bundle_v == 'human') {
 	
@@ -2371,7 +2335,7 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 
 	  $domains[] = 'Unknown';
 	} elseif(array_key_exists($field_v, $entity_reference_fields)) {
-	  
+
 	  preg_match('/node\:(\d+)/', $domain[0], $m);
 	  $rel_nid = intval($m[1]);
 	  
@@ -2387,12 +2351,12 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 
 	    $rel_bundles = array('manifestation');
 	  }
-	  
+
 	  // Only retrieve one document
 	  list($query, $results) = dss_elc_metrics_solr_query($rel_bundles, $query, 1);
-	  
+
 	  $rel_docs = $results->response->docs;
-	  
+
 	  if(empty($rel_docs)) {
 
 	    // Handling for field-specific cases
@@ -2400,7 +2364,14 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 	    if($field_v == 'sm_field_bib_rel_object' or
 	       $field_v == 'sm_field_loan_shareholder') {
 
-	      continue;
+	      // Attempt to load the Node from the database
+	      $rel_node = node_load($rel_nid);
+
+	      if($rel_node) {
+		$domains[] = empty($rel_node->title) ? 'Unknown' : $rel_node->title;
+	      } else {
+		$domains[] = 'Unknown';
+	      }
 	    }
 
 	    $domains[] = 'Unknown';
@@ -2409,11 +2380,12 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 	    $domains[] = empty($rel_docs[0]->label) ? 'Unknown' : $rel_docs[0]->label;
 	  }
 	} else {
-	  
+
 	  $domains[] = $domain[0];
 	}
       }
-      
+
+      //print_r($domains);
       
       /**
        * Generate the data for the (grouped) samples and link these points to the output
@@ -2459,8 +2431,7 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 	  $field_u_value = property_exists($item_doc, $field_u) ? $item_doc->$field_u : array();
 	  $field_u_value = is_array($field_u_value) ? array_shift($field_u_value) : $field_u_value;
 
-	  if(empty($field_u_value) and
-	     ($field_u_value !== 0)) {
+	  if(empty($field_u_value) and ($field_u_value !== 0)) {
 	    
 	    $field_u_value = 'Unknown';
 	  } else {
@@ -2556,10 +2527,23 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 	       $field_u == 'sm_field_bib_rel_object' or
 	       $field_u == 'sm_field_loan_shareholder') {
 
-	      continue;
-	    }
+	      // Here
+	      // Attempt to load the Node from the database
+	      $rel_node = node_load($nid);
 
-	    $field_u_value = 'Unknown';
+	      if($rel_node) {
+		//$domains[] = empty($rel_node->title) ? 'Unknown' : $rel_node->title;
+		$field_u_value = empty($rel_node->title) ? 'Unknown' : $rel_node->title;
+	      } else {
+		//$domains[] = 'Unknown';
+		$field_u_value = 'Unknown';
+	      }
+
+	      //continue;
+	    } else {
+
+	      $field_u_value = 'Unknown';
+	    }
 	  } else {
 	    
 	    $field_u_value = empty($range_docs[0]->label) ? 'Unknown' : $range_docs[0]->label;
@@ -2641,6 +2625,7 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
 
 	      $field_u_value = 'Unknown';
 	      $label = 'Unknown';
+
 	    } else {
 
 	      $field_u_value = empty($range_docs[0]->label) ? 'Unknown' : $range_docs[0]->label;
@@ -2731,10 +2716,14 @@ function dss_elc_metrics_bivariate_summation($bundle_u, $field_u, $bundle_v, $fi
       }
     }
 
+    file_put_contents($mongo_key . '.json', json_encode($samples));
+
+    /*
     $mongo_collection->update(array('query' => $mongo_key),
 			      array('query' => $mongo_key,
 				    'data' => $samples),
 			      array('upsert' => TRUE));
+    */
 
     // Uncertain as to why this is necessary
     foreach ( $connections as $conn ) {
@@ -3323,7 +3312,6 @@ function dss_elc_metrics_network_explore($node, $depth, &$network,
 
     // Work-around
     //! @todo Refactor and resolve
-
     if(empty($loan_docs)) {
 
       $query = array('(sm_field_bib_rel_subject:"node:' . $node->nid . '" OR sm_field_loan_shareholder:"node:' . $node->nid . '")');
@@ -3343,9 +3331,13 @@ function dss_elc_metrics_network_explore($node, $depth, &$network,
 	preg_match('/node\:(\d+)/', $neighbor_nid, $m);
 	$neighbor_nid = $m[1];
 
+	// Fixture
+	// Remove
+        $neighbor_nid = '280722';
+
 	$query = array('entity_id:' . $neighbor_nid);
 
-	list($query, $results) = dss_elc_metrics_solr_query(array('*'), $query, 1);
+	list($query, $results) = dss_elc_metrics_solr_query(array('item'), $query, 1);
 
 	$neighbor_docs = $results->response->docs;
 
@@ -3410,17 +3402,24 @@ function dss_elc_metrics_network_explore($node, $depth, &$network,
 
     $pers_rel_docs = $results->response->docs;
 
-    foreach($pers_rel_docs as $pers_rel_doc) {
+    //foreach($pers_rel_docs as $pers_rel_doc) {
+    // Fixtures
+    foreach( array('282216','282305','282312','282316') as $pers_rel_doc ) {
 
-      $neighbor_nids = $pers_rel_doc->sm_field_pers_rel_object;
+      //$neighbor_nids = $pers_rel_doc->sm_field_pers_rel_object;
+
+      // Fixtures
+      //
+      $neighbor_nids = array('282216','282305','282312','282316');
 
       if(!empty($neighbor_nids)) {
 
 	$neighbor_nid = array_shift($neighbor_nids);
 
 	// Retrieve the title
-	preg_match('/node\:(\d+)/', $neighbor_nid, $m);
-	$neighbor_nid = $m[1];
+	// Fixtures
+	//preg_match('/node\:(\d+)/', $neighbor_nid, $m);
+	//$neighbor_nid = $m[1];
 
 	$query = array('entity_id:' . $neighbor_nid);
 	list($query, $results) = dss_elc_metrics_solr_query(array('*'), $query, 1);
@@ -3495,6 +3494,10 @@ function dss_elc_metrics_network_explore($node, $depth, &$network,
     //list($query, $results) = dss_elc_metrics_solr_query(array('loan', 'authorship'), $query, 1000000);
     list($query, $results) = dss_elc_metrics_solr_query(array('loan', 'authorship'), $query, $row, false, array(), array(), $sort);
 
+
+    //
+    //$neighbor_nids = array('282341', '282348', '282355');
+
     $loan_docs = $results->response->docs;
     foreach($loan_docs as $loan_doc) {
 
@@ -3514,8 +3517,6 @@ function dss_elc_metrics_network_explore($node, $depth, &$network,
 	$neighbor_docs = $results->response->docs;
 
 	if( !empty($neighbor_docs) ) {
-
-
 
 	  $neighbor_doc = array_shift($neighbor_docs);
 
@@ -3651,16 +3652,10 @@ function _dss_elc_metrics_network($nids, $depth = 1) {
   }
 
   /*
-{
-  "nodes":[
-    {"name":"Myriel","group":1},
-    {"name":"Mme.Hucheloup","group":8}
-  ],
-  "links":[
-    {"source":1,"target":0,"value":1},
-  ]
-}
-  */
+   * Here, the data is transformed for D3
+   *
+   *
+   */
   $node_index = array();
   $links = array();
 
@@ -3699,20 +3694,8 @@ function _dss_elc_metrics_network($nids, $depth = 1) {
   $data = array('nodes' => $nodes,
 		'links' => $links);
 
-  /*
-  $response = array(
-		    'data' => $network,
-		    'labels' => $labels,
-		    'groups' => $groups);
-
-  return $response;
-  */
-
   return $data;
-
-  //return array();
 }
-
 
 /**
  * @author griffinj
@@ -3827,6 +3810,61 @@ function dss_elc_metrics_get_network_ajax() {
     }
   }
 
+  if(true) {
+
+    $data = array(
+	  'nodes' => array(
+			   array('name' => 'fixture1',
+				 'group' => 'root'),
+
+			   array('name' => 'fixture3',
+				 'group' => 'item'),
+			   array('name' => 'fixture2',
+				 'group' => 'book'),
+			   array('name' => 'fixture7',
+				 'group' => 'periodical'),
+
+			   array('name' => 'fixture5',
+				 'group' => 'Shareholder'),
+			   array('name' => 'fixture6',
+				 'group' => 'Representative'),
+			   array('name' => 'fixture4',
+				 'group' => 'Author'),
+
+			   ),
+	  'links' => array(
+			   array('source' => 0,
+				 'target' => 1,
+				 'value' => 1,
+				 'type' => 'edge'),
+			   array('source' => 0,
+				 'target' => 2,
+				 'value' => 1,
+				 'type' => 'edge'),
+
+			   array('source' => 0,
+				 'target' => 3,
+				 'value' => 1,
+				 'type' => 'edge'),
+			   array('source' => 0,
+				 'target' => 4,
+				 'value' => 1,
+				 'type' => 'edge'),
+			   array('source' => 0,
+				 'target' => 5,
+				 'value' => 1,
+				 'type' => 'edge'),
+			   array('source' => 0,
+				 'target' => 6,
+				 'value' => 1,
+				 'type' => 'edge'),
+
+			   ),
+	  );
+
+    return drupal_json_output($data);
+  }
+
   if(!empty($data)) {
 
     if(!array_key_exists('limit', $data)) {
@@ -3847,11 +3885,7 @@ function dss_elc_metrics_get_network_ajax() {
 
 	$subject_nids = array();
 
-	//foreach(preg_split('/\)/', $data['subject_nids']) as $value) {
 	foreach(preg_split('/"\s?,/', $data['subject_nids']) as $value) {
-
-	  //preg_match('/\((\d+)/', $value, $matches);
-	  //$subject_nids[] = $matches[1];
 
 	  $subject_nids[] = $value;
 	}
@@ -3859,37 +3893,11 @@ function dss_elc_metrics_get_network_ajax() {
 	$data['subject_nids'] = $subject_nids;
       }
 
-      /*
-      // Normalize Drupal form data
-      if(array_key_exists('value2', $data['limit'])) {
-
-	$min_date = (float) $data['limit']['value'];
-	$max_date = (float) $data['limit']['value2'];
-
-	//$min_date = (string) (-5005047600000 + $min_date*259200000);
-	//$max_date = (string) (-4859982000000 - (560 - $max_date)*259200000);
-
-	$min_date = (string) (-5005047600 + $min_date*259200);
-	$max_date = (string) (-4859982000 - (560 - $max_date)*259200);
-      }
-      */
-
-      // Caching
-      //return drupal_json_output(dss_elc_metrics_network($data['bundle'], $data['subject_nids'], $min_date, $max_date));
-
-      /*
-      if(array_key_exists('value2', $data['limit']) and array_key_exists('value', $data['limit'])) {
-
-	return drupal_json_output(_dss_elc_metrics_network($data['bundle'], $data['subject_nids'], $data['limit']['value'], $data['limit']['value2']));
-      } else {
-
-	return drupal_json_output(_dss_elc_metrics_network($data['bundle'], $data['subject_nids']));
-      }
-      */
-
       return drupal_json_output(_dss_elc_metrics_network($data['subject_nids'], $data['depth']));
     }
   }
+
+
 }
 
 /*
@@ -4116,52 +4124,17 @@ function dss_elc_metrics_get_items($request = NULL) {
 
   $request = !is_null($request) ? $request : $_GET;
 	
-	//Declaring query object
-	$query = new EntityFieldQuery();
-	
-	/*
-	//choosing which column has been clicked for sorting
-	switch(intval($_GET['order']['0']['column'])){
-		
-	case 0://author
-			$sort_value = 'field_artifact_was_authored_by';
-			break;
-			
-		case 1://title
-			$sort_value = 'title';
-			break;
-			
-		case 2://vols.
-			$sort_value = 'field_item_volume_migrate';
-			break;
-		
-		case 3://type
-			$sort_value = 'type';
-			break;
-			
-		case 4://subject
-		        $sort_value = 'field_item_subject';
-			break;
-			
-		case 5://modified
-			$sort_value = 'changed';
-			break;
-			
-		default:
-			$sort_value = 'title';
-			break;
-			
-	}
-	*/
+  // Declaring query object
+  $query = new EntityFieldQuery();
 
-	$sort_value_map = array('sort_field_artifact_was_authored_by_label',
-				'sort_label',
-				'is_field_item_volume_migrate',
-				'bundle',
-				'sort_field_item_subject',
-				'is_changed');
+  $sort_value_map = array('sort_field_artifact_was_authored_by_label',
+			  'sort_label',
+			  'is_field_item_volume_migrate',
+			  'bundle',
+			  'sort_field_item_subject',
+			  'is_changed');
 	
-	$sort_value = $sort_value_map[intval($request['order']['0']['column'])];
+  $sort_value = $sort_value_map[intval($request['order']['0']['column'])];
 
 	/**
 	 * griffinj@lafayette.edu
@@ -4206,6 +4179,7 @@ function dss_elc_metrics_get_items($request = NULL) {
 	}
 
 	list($final_query, $solr_response) = dss_elc_metrics_datatables_query(array('item', 'book', 'periodical'), $request);
+
 	$datatable_json = dss_elc_metrics_datatables_response($solr_response, array('item', 'book', 'periodical'));
 
 	/**
@@ -4219,12 +4193,10 @@ function dss_elc_metrics_get_items($request = NULL) {
 	  $mongo_collection->insert(array('view' => $mongo_key, 'data' => $datatable_json));
 	}
   
-	if(true) {
-    
-	  return drupal_json_output($datatable_json);
-	}
+	return drupal_json_output($datatable_json);
+}
 
-	exit(1);
+function dss_elc_metrics_get_items_deprecated($request = NULL) {
 
 	//If we are sorting by any column other than author, volumes, or subject, do this
 	if($sort_value != 'field_artifact_was_authored_by' && $sort_value != 'field_item_volume_migrate' && $sort_value != 'field_item_subject'){
@@ -4661,7 +4633,7 @@ function dss_elc_metrics_get_loans($request = NULL) {
   $request = !is_null($request) ? $request : $_GET;
   $nid = array_key_exists('nid', $request) ? $request['nid'] : NULL;
 
-  //Declaring query object
+  // Declaring query object
   $query = new EntityFieldQuery();
   
   /*
@@ -4763,8 +4735,8 @@ function dss_elc_metrics_get_loans($request = NULL) {
     // Retrieve the cached data set from the MongoDB
     $cached_datatable_json = $mongo_collection->findOne(array('view' => $mongo_key));
 
-    //if(false) {
-    if($cached_datatable_json) {
+    if(false) {
+      //if($cached_datatable_json) {
 
       $data = $cached_datatable_json['data'];
       $data['draw'] = intval($request['draw']) + 1;
@@ -4842,16 +4814,6 @@ function dss_elc_metrics_apachesolr_query_alter(&$query) {
     $query->page = $request['start'] / $request['length'];
     //$query->addParam('rows', 1000000);
   }
-}
-
-/**
- * Implements callback_queue_worker().
- * A callback for (re)caching the metrics for the visualization interfaces
- * 
- */
-function dss_elc_metrics_cache($cache_update) {
-
-  drush_dss_elc_metrics_cache();
 }
 
 /**

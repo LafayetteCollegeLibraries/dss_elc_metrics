@@ -40,6 +40,7 @@ function dss_elc_metrics_solr_query($bundles, $query, $rows = 10, $facet = FALSE
 					  '' => 'ss_field_item_subject',
 					  */
 					  //'' => 'is_changed'
+					  'field_book_or_periodical' => 'bm_field_book_or_periodical'
 					  ),
 			  'human' => array(
 					   'field_human_gender' => 'bm_field_human_gender',
@@ -137,6 +138,8 @@ function dss_elc_metrics_solr_query($bundles, $query, $rows = 10, $facet = FALSE
     $sort = $solr_field . ' ' . $request['order']['0']['dir'];
   }
   */
+
+  //  $query_string .= ' AND NOT site:"http://elc.stage.lafayette.edu/"';
 
   $params = array('q' => $query_string,
 		  //'rows' => $request['length'],
@@ -300,8 +303,8 @@ function dss_elc_metrics_datatables_query($bundles, $request, $filter_query = NU
   /*
    * In order to ensure that NULL values are filtered
    */
-  $filter_not_null = '+' . $solr_field_map[ $first_bundle ][0] . ':[* TO *]';
-  $query[] = $filter_not_null;
+  //$filter_not_null = '+' . $solr_field_map[ $first_bundle ][0] . ':[* TO *]';
+  //$query[] = $filter_not_null;
 
   $query_string = $bundle_query;
 
@@ -339,7 +342,7 @@ function dss_elc_metrics_datatables_query($bundles, $request, $filter_query = NU
   }
 
   // For searches scoped to the site
-  $query_string .= ' AND site:"' . 'https://elc.prod.lafayette.edu/' . '"';
+  //$query_string .= ' AND site:"' . 'https://elc.prod.lafayette.edu/' . '"';
 
   $params = array('q' => $query_string,
 		  //'rows' => 100000,
@@ -363,11 +366,13 @@ function dss_elc_metrics_datatables_query($bundles, $request, $filter_query = NU
 
   //$query = apachesolr_drupal_query('apachesolr', $params, $sort, '', $solr);
 
-  //print_r($params);
-  //exit(1);
-
   //$query->page = $request['start'] / ($request['length'] / 5);
   $query->page = $request['start'] / ($request['length']);
+
+  /*
+  print_r($query);
+  exit(1);
+  */
 
   list($query, $solr_response) = apachesolr_do_query($query);
 
